@@ -1,0 +1,4 @@
+hosts:
+    10.10.10.10:
+        username: user
+        password: password
