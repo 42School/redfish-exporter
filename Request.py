@@ -10,7 +10,7 @@ import sys
 class Req():
     def __init__(self, proto, ip, username=None, password=None, verify=True):
         """ default url for login / search request """
-        self._default_url = proto + "://" + ip + "/redfish/v1"
+        self._default_url = proto + "://" + ip
         self._username = username
         self._password = password
         self._verify = verify
