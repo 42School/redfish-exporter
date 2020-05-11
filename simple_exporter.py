@@ -7,7 +7,6 @@ from prometheus_client.exposition import generate_latest
 
 from Collector import Collector
 
-
 class metricHandler:
     def __init__(self, config_file):
         self._config_file = config_file
@@ -36,9 +35,10 @@ class metricHandler:
         """ collect data throw redfish library sushi """
         registry = Collector(
             target,
+            "system",
             self._hosts["hosts"][target]["username"],
             self._hosts["hosts"][target]["password"],
-            "system"
+            False,
         )
         collected_metric = generate_latest(registry)
         resp.body = collected_metric
