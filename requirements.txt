@@ -13,6 +13,4 @@ PyYAML==5.3.1
 requests==2.23.0
 six==1.14.0
 stevedore==1.32.0
-sushi==0.3.6
-sushy==3.2.0
 urllib3==1.25.9

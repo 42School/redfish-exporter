@@ -1,3 +1,5 @@
+__version__ = '0.1'
+
 import click
 from simple_exporter import falcon_app
 
