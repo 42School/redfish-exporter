@@ -5,7 +5,11 @@ from wsgiref import simple_server
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
 from prometheus_client.exposition import generate_latest
 
+from Request import Req
 from Collector import Collector
+
+IDRAC_VERSION = ('idrac8', 'idrac9')
+ILO_VERSION = ('ilo4', 'ilo5')
 
 class metricHandler:
     def __init__(self, config_file):
@@ -26,23 +30,32 @@ class metricHandler:
 
         self.parse_config(self._config_file)
 
+        """ TODO: CHECK CONFIG FILE VALIDITY """
+
         """ throw error if target not found """
-        if target not in self._hosts["hosts"]:
+        if target not in self._hosts['hosts']:
             resp.status = falcon.HTTP_404
-            resp.body = "not found"
+            resp.body = 'not found'
             return
+        host = self._hosts['hosts'][target]
+
+        """ create collector for each remote """
+        if host['version'] in IDRAC_VERSION:
+            conn = Req(host['proto'], target, host['username'], host['password'], host['verify'])
+        elif host['version'] in ILO_VERSION:
+            conn = Req(host['proto'], target, host['username'], host['password'], host['verify'])
+            conn.ilo_auth()
 
         """ collect data throw redfish library sushi """
         registry = Collector(
-            target,
-            "system",
-            self._hosts["hosts"][target]["username"],
-            self._hosts["hosts"][target]["password"],
-            False,
+            'system',
+            host['version'],
+            conn,
+            'redfish_exporter'
         )
+
         collected_metric = generate_latest(registry)
         resp.body = collected_metric
-
 
 def falcon_app(config_file="./config.yaml", ip="127.0.0.1", port=9111):
     print('starting server http://127.0.0.1:{}/metrics'.format(port))

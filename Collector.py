@@ -1,66 +1,85 @@
+__version__ = '0.1'
+
 import time
 import random
 from prometheus_client import Metric
-#from collectors.System import systemScrape
 from Request import Req
+from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY, InfoMetricFamily
 
-REDFISH_BASE_URL = "/redfish/v1"
-RAID_CTRL_URL = REDFISH_BASE_URL + "/Systems/System.Embedded.1/Storage/Controllers"
+IDRAC8_REDFISH_BASE_URL = "/redfish/v1"
+ILO4_REDFISH_BASE_URL = "/rest/v1"
+RAID_CTRL_URL = "/Systems/System.Embedded.1/Storage/Controllers"
 
 class Collector(object):
-    def __init__(self, host, service, username=None, password=None, verify=True):
-        self._scrape_ip = host
-        self._username = username
-        self._password = password
+    def __init__(self, service, sys_version, conn, prefix):
         self._service = service
+        self._sys_version = sys_version
+        self._conn = conn
         self._labels = {}
+        self._prefix = prefix
         self._set_labels()
-        self._verify = verify
 
     def _set_labels(self):
         self._labels.update({'service': self._service})
 
-    """ regroup all metrics to be display  """
+    """ regroup all metrics to be display """
     def _get_metrics(self):
 
-        #system = systemScrape()
-        req = Req("https", self._scrape_ip, self._username, self._password, self._verify)
-
-        response = req.get(RAID_CTRL_URL)
+        resp_ctrl_list = self._conn.get(IDRAC8_REDFISH_BASE_URL + RAID_CTRL_URL)
 
         raids_ctrl = {}
         metrics = {}
-        metrics["raid_controller"] = ()
-        for member in response["Members"]:
+        metrics['raid_controller'] = dict()
+        metrics['disk'] = dict()
+        """ parse raid controller name """
+        for member in resp_ctrl_list['Members']:
 
-            raid_ctrl_url = member["@odata.id"]
-            raid_ctrl_name = raid_ctrl_url.replace(RAID_CTRL_URL + "/", "")
+            raid_ctrl_url = member['@odata.id']
+            raid_ctrl_name = raid_ctrl_url.replace(IDRAC8_REDFISH_BASE_URL + RAID_CTRL_URL + '/', '')
 
-            #raids_ctrl[raid_ctrl_name] = [] # disk
-            metrics["raid_controller"].push(raid_ctrl_name)
+            """ get controllers info """
+            resp_ctrl_status = self._conn.get(IDRAC8_REDFISH_BASE_URL + RAID_CTRL_URL + '/' + raid_ctrl_name)
 
-        final_metrics = {}
-        print(metrics)
-        """ merge dicts """
-        for group in metrics:
-            print(group)
-            #final_metrics = dict(group.items() + final_metrics.item())
+            ctrl_status = resp_ctrl_status['Status']
+            if ctrl_status['Health'] and ctrl_status['State']:
+                metrics['raid_controller'][raid_ctrl_name] = {
+                    'health': ctrl_status['Health'],
+                    'state': ctrl_status['State']
+                }
+            else:
+                metrics['raid_controller'][raid_ctrl_name] = { 'health': '', 'state': ''}
 
-        print(final_metrics)
+            """ get disk list by controller """
+            for disk in resp_ctrl_status['Devices']:
+
+                disk_name = disk['Name']
+                disk_status = disk['Status']
+                metrics['disk'][disk_name] = {
+                    'health': disk_status['Health'],
+                    'state': disk_status['State']
+                }
+
         return metrics
 
     """ Method called by generate_lastest() prometheud fct """
     def collect(self):
         metrics = self._get_metrics()
+        custom_label_names = []
+        custom_label_values = []
 
-        if metrics:
-            for k, v in metrics.items():
-                metric = Metric(k, k, 'counter')
-                labels = {}
-                labels.update(self._labels)
-                metric.add_sample(k, value=v, labels=labels)
+        """ push exporter version """
+        m = GaugeMetricFamily(
+            self._prefix + '_version',
+            'Version of redfish_exporter running',
+            labels=['version'] + custom_label_names)
+        m.add_metric([__version__] + custom_label_values, 1.0)
+        yield m
 
-                if metric.samples:
-                    yield metric
-                else:
-                    pass
+        label_names = ['name'] + custom_label_names
+        for metric_name, v in metrics.items():
+            """ add prefix define in collector call """
+            m = InfoMetricFamily(self._prefix + '_' + metric_name, '', labels=label_names)
+
+            for name, value in v.items():
+                m.add_metric([name] + custom_label_values, value)
+            yield m

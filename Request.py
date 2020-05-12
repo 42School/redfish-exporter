@@ -21,25 +21,30 @@ class Req():
         if username or password:
             self.set_http_basic_auth(username, password)
 
-
+    """ Sets the http basic authentication information """
     def set_http_basic_auth(self, username, password):
-        """Sets the http basic authentication information."""
         self._session.auth = (username, password)
 
+    """ Close this connector and the associated HTTP session."""
     def close(self):
-        """Close this connector and the associated HTTP session."""
         self._session.close()
 
-    def get_session():
-        return self._session
+    """ special auth function for ilo (connexion with session instead of basic auth """
+    def ilo_auth(self):
+        auth_url = '/rest/v1/Sessions'
+        data = {
+            'UserName': self._username,
+            'Password': self._password
+        }
+        self._req('POST', auth_url, data)
 
-    def _req(self, method, path="", data=None):
+    def _req(self, method, path='', data=None):
 
         url = self._default_url + path
         try:
-            response = self._session.request(method, url, json=data)
+            response = self._session.request(method, url, data=data)
         except requests.ConnectionError as e:
-            raise exceptions.ConnectionError(url=url, error=e)
+            raise e
 
         return response
 
