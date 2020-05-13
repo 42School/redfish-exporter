@@ -1,5 +1,5 @@
-import falcon
 import yaml
+import falcon
 
 from wsgiref import simple_server
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
@@ -7,9 +7,9 @@ from prometheus_client.exposition import generate_latest
 
 from Request import Req
 from Collector import Collector
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 IDRAC_VERSION = ('idrac8', 'idrac9')
-ILO_VERSION = ('ilo4', 'ilo5')
 
 class metricHandler:
     def __init__(self, config_file):
@@ -42,21 +42,21 @@ class metricHandler:
         """ create collector for each remote """
         if host['version'] in IDRAC_VERSION:
             conn = Req(host['proto'], target, host['username'], host['password'], host['verify'])
-        elif host['version'] in ILO_VERSION:
-            conn = Req(host['proto'], target, host['username'], host['password'], host['verify'])
-            conn.ilo_auth()
 
         """ collect data throw redfish library sushi """
         registry = Collector(
-            'system',
-            host['version'],
-            conn,
-            'redfish_exporter'
+            'system', # service name
+            host['version'], # iDRAC version
+            conn, # conn object from Req
+            'redfish_exporter' # prefix for metrics name
         )
 
         collected_metric = generate_latest(registry)
         resp.body = collected_metric
 
+"""
+    Main app
+"""
 def falcon_app(config_file="./config.yaml", ip="127.0.0.1", port=9111):
     print('starting server http://127.0.0.1:{}/metrics'.format(port))
     api = falcon.API()

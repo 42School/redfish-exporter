@@ -3,11 +3,9 @@ __version__ = '0.1'
 import click
 from simple_exporter import falcon_app
 
-
 @click.group(help='')
 def cli():
     pass
-
 
 @click.command()
 @click.option('-f', '--config-file', help='config file with idrac hosts', required=True, type=str)
