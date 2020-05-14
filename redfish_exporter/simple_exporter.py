@@ -1,13 +1,11 @@
 import yaml
-import falcon
 
-from wsgiref import simple_server
+from flask import Flask, Response
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
 from prometheus_client.exposition import generate_latest
 
-from Request import Req
-from Collector import Collector
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from .Request import Req
+from .Collector import Collector
 
 IDRAC_VERSION = ('idrac8', 'idrac9')
 
@@ -25,18 +23,14 @@ class metricHandler:
 
         self._hosts = config
 
-    def on_get(self, req, resp, target):
-        resp.set_header('Content-Type', CONTENT_TYPE_LATEST)
-
+    def metrics(self, target):
         self.parse_config(self._config_file)
 
         """ TODO: CHECK CONFIG FILE VALIDITY """
 
         """ throw error if target not found """
         if target not in self._hosts['hosts']:
-            resp.status = falcon.HTTP_404
-            resp.body = 'not found'
-            return
+            return Response('not found', status=404)
         host = self._hosts['hosts'][target]
 
         """ create collector for each remote """
@@ -52,18 +46,6 @@ class metricHandler:
         )
 
         collected_metric = generate_latest(registry)
-        resp.body = collected_metric
-
-"""
-    Main app
-"""
-def falcon_app(config_file="./config.yaml", ip="127.0.0.1", port=9111):
-    print('starting server http://127.0.0.1:{}/metrics'.format(port))
-    api = falcon.API()
-    api.add_route(
-            '/metrics/{target}',
-            metricHandler(config_file=config_file)
-    )
-
-    httpd = simple_server.make_server(ip, port, api)
-    httpd.serve_forever()
+        resp = Response(collected_metric)
+        resp.headers['Content-Type'] = CONTENT_TYPE_LATEST
+        return resp
