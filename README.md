@@ -10,5 +10,5 @@ Add your iDRAC ip and credentials
 
 Then run the exporter:
 ```
-python app.py start -i 127.0.0.1 -p 9111 -f config.yaml
+gunicorn -b 127.0.0.1:9111 --reload redfish_exporter:app_dispatch
 ```
