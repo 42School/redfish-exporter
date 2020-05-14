@@ -11,7 +11,7 @@ class Collector(object):
         self._sys_version = sys_version
         self._conn = conn
         self._labels = {}
-        self._prefix = prefix
+        self.prefix = prefix
         self._set_labels()
 
     def _set_labels(self):
@@ -19,28 +19,26 @@ class Collector(object):
 
     """ regroup all metrics to be display """
     def _get_metrics(self):
-        raid = Raid(self._conn)
-        return raid.get_raid_metrics()
+        return metrics
 
     """ Method called by generate_lastest() prometheud fct """
     def collect(self):
-        metrics = self._get_metrics()
+        #metrics = self._get_metrics()
         custom_label_names = []
         custom_label_values = []
 
+        raid = Raid(self._conn, self.prefix)
+        raid.get_metrics()
+        raid_metrics = raid.parse_for_prom()
+
         """ push exporter version """
         m = GaugeMetricFamily(
-            self._prefix + '_version',
+            self.prefix + '_version',
             'Version of redfish_exporter running',
             labels=['version'] + custom_label_names)
-        m.add_metric([__version__] + custom_label_values, 1.0)
+        m.add_metric([__version__] + custom_label_values, __version__)
         yield m
 
-        label_names = ['name'] + custom_label_names
-        for metric_name, v in metrics.items():
-            """ add prefix define in collector call """
-            m = InfoMetricFamily(self._prefix + '_' + metric_name, '', labels=label_names)
-
-            for name, value in v.items():
-                m.add_metric([name] + custom_label_values, value)
-            yield m
+        """ add raid emtrics """
+        for item in raid_metrics:
+            yield item
