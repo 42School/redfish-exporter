@@ -17,18 +17,12 @@ class Collector(object):
     def _set_labels(self):
         self._labels.update({'service': self._service})
 
-    """ regroup all metrics to be display """
-    def _get_metrics(self):
-        return metrics
-
     """ Method called by generate_lastest() prometheud fct """
     def collect(self):
-        #metrics = self._get_metrics()
         custom_label_names = []
         custom_label_values = []
 
         raid = Raid(self._conn, self.prefix)
-        raid.get_metrics()
         raid_metrics = raid.parse_for_prom()
 
         """ push exporter version """

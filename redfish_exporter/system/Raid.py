@@ -1,78 +1,74 @@
 from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY, InfoMetricFamily
+import json
+
+""" uncomment for testing purpose (faster) """
+#with open('./metrics/Controllers-raid-details.json') as json_data:
+#    controller_details_json = json.load(json_data)
+#with open('./metrics/Controllers-list.json') as json_data:
+#    controller_list_json = json.load(json_data)
 
 IDRAC8_REDFISH_BASE_URL = '/redfish/v1'
 RAID_CTRL_URL = "/Systems/System.Embedded.1/Storage/Controllers"
-
-status = [{
-        'type': 'health',
-        'value': 0
-    },{
-        'type': 'state',
-        'value': 0
-}]
 
 class Raid(object):
     def __init__(self, conn, prefix):
         self._conn = conn
         self.prefix = prefix
         self.metrics = {}
+        self._ctrl_list = []
+        self._list()
+        self._get_metrics()
 
     """ list and parse controllers """
     def _list(self):
         ret = self._conn.get(RAID_CTRL_URL)
+        """ uncomment for testing purpose (faster) """
+        #ret = controller_list_json
         try:
-            raid_ctrl = list()
-
             """ parse raid controller name """
             for member in ret['Members']:
-
                 raid_ctrl_url = member['@odata.id']
-                raid_ctrl.append(raid_ctrl_url.replace(IDRAC8_REDFISH_BASE_URL + RAID_CTRL_URL + '/', ''))
+                self._ctrl_list.append(raid_ctrl_url.replace(IDRAC8_REDFISH_BASE_URL + RAID_CTRL_URL + '/', ''))
 
         except KeyError as e:
             raise "Invalid dict key from redfish response: " + e
 
-        return raid_ctrl
+    def _get_metrics(self):
 
-    """ """
-    def get_metrics(self):
+        """ get controllers details """
+        for ctrl in self._ctrl_list:
+            self._details(ctrl)
 
-        raids_ctrl = {}
-        self.metrics['raid_controller'] = dict()
-        self.metrics['disk'] = dict()
-
-        """ list controllers """
-        raid_ctrl = self._list()
-        for ctrl in raid_ctrl:
-            ret = self._get_disks(ctrl)
-            self.metrics['raid_controller'][ctrl] = ret[0]
-            self.metrics['disk'] = { **self.metrics['disk'], **ret[1] }
-
-    def _get_disks(self, ctrl_name):
+    def _details(self, ctrl_name):
 
         """ get controllers info """
         ctrl_status = self._conn.get(RAID_CTRL_URL + '/' + ctrl_name)
+        """ uncomment for testing purpose (faster) """
+        #ctrl_status = controller_details_json
 
         try:
             ctrl = ctrl_status['Status']
-            if ctrl['Health'] and ctrl['State']:
-                status[0]['value'] = ctrl['Health']
-                status[1]['value'] = ctrl['State']
 
-            disks = {}
+            """ don't keep unused controller """
+            if ctrl['Health'] and ctrl['State']:
+                self.metrics[ctrl_name] = {
+                    'health': ctrl['Health'],
+                    'status': ctrl['State'],
+                    'disks': []
+                }
+
             """ get disk list by controller """
             for disk in ctrl_status['Devices']:
 
                 disk_name = disk['Name']
                 disk_status = disk['Status']
-                disks[disk_name] = {
+                self.metrics[ctrl_name]['disks'].append({
+                    'name': disk_name,
                     'health': disk_status['Health'],
                     'state': disk_status['State']
-                }
-        except KeyError as e:
-            raise "Invalid dict key from redfish response: " + e
-
-        return [status, disks]
+                })
+        except KeyError:
+            raise "Invalid dict key from redfish response: "
 
     """ transform metric value into valid prom metric value """
     def _cast(self, value):
@@ -85,28 +81,42 @@ class Raid(object):
             return 0
         return value
 
-    """ metrics must be on a specific format for prometheus """
+    """ 
+        metrics must be on a specific format for prometheus
+
+        {
+            'controller1': {
+                'health': 'OK',
+                'state': 'Enabled'
+                'disks': [{
+                        'name': 'disk1',
+                        'health': 'OK',
+                        'state': 'Enabled'
+                    },{
+                        ...
+                        ...
+                }]
+            },
+                ...
+                ...
+        }
+    """
     def parse_for_prom(self):
-        label_names = ['name']
+        label_names = ['name', 'state', 'health']
         metrics = list()
+
         for metric_name, v in self.metrics.items():
             """ add prefix define in collector call """
-            i = InfoMetricFamily(self.prefix + '_' + metric_name, '', labels=label_names)
+            gauge = GaugeMetricFamily(self.prefix + '_controller', '', labels=label_names)
 
-            for name, value in v.items():
-                if type(value) is list:
-                    print(name)
-                    print(value)
-                    for item in value:
-                        m = GaugeMetricFamily(self.prefix + '_' + metric_name, '', labels=label_names)
-                        m.add_metric([value[0]['type']], self._cast(value[0]['value']))
-                        m.add_metric([value[1]['type']], self._cast(value[1]['value']))
-                else:
-                    i.add_metric([name], self._cast(value))
+            """ expose raid status """
+            gauge.add_metric([metric_name, v['status'], v['health']], self._cast(v['health']))
+            metrics.append(gauge)
 
-                metrics.append(m)
-            metrics.append(i)
-
-        metrics.append(i)
+            """ expose disks status """
+            for disk in v['disks']:
+                gauge = GaugeMetricFamily(self.prefix + '_controller_disk', '', labels=label_names + ['disk'])
+                gauge.add_metric([metric_name, disk['state'], disk['health'], disk['name']], self._cast(disk['health']))
+                metrics.append(gauge)
 
         return metrics
