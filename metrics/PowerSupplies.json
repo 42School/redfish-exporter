@@ -1,0 +1,52 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#Power.Power",
+  "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Power/PowerSupplies/PSU.Slot.1",
+  "@odata.type": "#Power.v1_0_2.PowerSupply",
+  "FirmwareVersion": "XX.XX.XX",
+  "LastPowerOutputWatts": 750,
+  "LineInputVoltage": 230,
+  "LineInputVoltageType": "ACMidLine",
+  "MemberID": "PSU.Slot.1",
+  "Model": "PWR SPLY,750W",
+  "Name": "PS1 Status",
+  "PartNumber": "XXXXX",
+  "PowerCapacityWatts": 750,
+  "PowerSupplyType": "AC",
+  "Redundancy": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Power/Redundancy/iDRAC.Embedded.1%23SystemBoardPSRedundancy",
+      "MaxNumSupported": 4,
+      "MemberID": "iDRAC.Embedded.1#SystemBoardPSRedundancy",
+      "MinNumNeeded": 2,
+      "Mode": [
+        {
+          "Member": "N+1"
+        }
+      ],
+      "Name": "System Board PS Redundancy",
+      "RedundancySet": [
+        {
+          "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Power/PowerSupplies/PSU.Slot.1"
+        }
+      ],
+      "RedundancySet@odata.count": 2,
+      "Status": {
+        "Health": "Critical",
+        "State": "Enabled"
+      }
+    }
+  ],
+  "Redundancy@odata.count": 1,
+  "RelatedItem": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+    }
+  ],
+  "RelatedItem@odata.count": 1,
+  "SerialNumber": "XXXX",
+  "SparePartNumber": "XXX",
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  }
+}

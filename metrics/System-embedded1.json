@@ -1,0 +1,147 @@
+{
+  "@odata.context": "/redfish/v1/$metadata#ComputerSystem.ComputerSystem",
+  "@odata.id": "/redfish/v1/Systems/System.Embedded.1",
+  "@odata.type": "#ComputerSystem.v1_0_1.ComputerSystem",
+  "Actions": {
+    "#ComputerSystem.Reset": {
+      "ResetType@Redfish.AllowableValues": [
+        "On",
+        "ForceOff",
+        "GracefulRestart",
+        "PushPowerButton",
+        "Nmi"
+      ],
+      "target": "/redfish/v1/Systems/System.Embedded.1/Actions/ComputerSystem.Reset"
+    }
+  },
+  "AssetTag": "",
+  "BiosVersion": "2.5.1",
+  "Boot": {
+    "BootSourceOverrideEnabled": "Once",
+    "BootSourceOverrideTarget": "None",
+    "BootSourceOverrideTarget@Redfish.AllowableValues": [
+      "None",
+      "Hdd",
+      "Cd",
+      "Floppy",
+      "BiosSetup",
+      "SDCard",
+      "Pxe",
+      "Utilities",
+      "UefiTarget"
+    ],
+    "UefiTargetBootSourceOverride": ""
+  },
+  "Description": "Computer System which represents a machine (physical or virtual) and the local resources such as memory, cpu and other devices that can be accessed from that machine.",
+  "EthernetInterfaces": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/EthernetInterfaces"
+  },
+  "HostName": "localhost",
+  "Id": "System.Embedded.1",
+  "IndicatorLED": "Off",
+  "Links": {
+    "Chassis": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1"
+      }
+    ],
+    "Chassis@odata.count": 1,
+    "CooledBy": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.1A"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.2A"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.3A"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.4A"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.5A"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.6A"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.7A"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.1B"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.2B"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.3B"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.4B"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.5B"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.6B"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Sensors/Fans/0x17||Fan.Embedded.7B"
+      }
+    ],
+    "CooledBy@odata.count": 14,
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/iDRAC.Embedded.1"
+      }
+    ],
+    "ManagedBy@odata.count": 1,
+    "PoweredBy": [
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Power/PowerSupplies/PSU.Slot.1"
+      },
+      {
+        "@odata.id": "/redfish/v1/Chassis/System.Embedded.1/Power/PowerSupplies/PSU.Slot.2"
+      }
+    ],
+    "PoweredBy@odata.count": 2
+  },
+  "Manufacturer": "Dell Inc.",
+  "MemorySummary": {
+    "Status": {
+      "Health": "Warning",
+      "HealthRollUp": "Warning",
+      "State": "Enabled"
+    },
+    "TotalSystemMemoryGiB": 2048
+  },
+  "Model": "PowerEdge R630",
+  "Name": "System",
+  "PartNumber": "13CEDEFRF",
+  "PowerState": "On",
+  "ProcessorSummary": {
+    "Count": 1,
+    "Model": "Intel(R) Xeon(R) CPU E5-XXXX @ 2.00GHz",
+    "Status": {
+      "Health": "OK",
+      "HealthRollUp": "OK",
+      "State": "Enabled"
+    }
+  },
+  "Processors": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Processors"
+  },
+  "SKU": "DWESEDFE",
+  "SerialNumber": "CN123441233312",
+  "SimpleStorage": {
+    "@odata.id": "/redfish/v1/Systems/System.Embedded.1/Storage/Controllers"
+  },
+  "Status": {
+    "Health": "Critical",
+    "HealthRollUp": "Critical",
+    "State": "Enabled"
+  },
+  "SystemType": "Physical",
+  "UUID": "xxx-xxxx"
+}
