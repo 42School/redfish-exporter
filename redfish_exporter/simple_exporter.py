@@ -1,4 +1,5 @@
 import yaml
+import os
 
 from flask import Flask, Response
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
@@ -56,9 +57,10 @@ class metricHandler:
             'redfish_exporter' # prefix for metrics name
         )
         """ test connection before getting metrics """
-        err, status = self.get_idrac_status()
-        if err:
-            return Response(err, status=status)
+        if os.environ.get('EXPORTER_LOCAL_METRICS'):
+            err, status = self.get_idrac_status()
+            if err:
+                return Response(err, status=status)
 
         collected_metric = generate_latest(registry)
         resp = Response(collected_metric)

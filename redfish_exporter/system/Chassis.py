@@ -1,13 +1,15 @@
 from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY, InfoMetricFamily
 import json
+import os
 
-""" uncomment for testing purpose (faster) """
-with open('./metrics/Chassis-embedded1.json') as json_data:
-    chassis_general_json = json.load(json_data)
-with open('./metrics/PowerSupplies.json') as json_data:
-    power_detail_json = json.load(json_data)
-with open('./metrics/Thermal.json') as json_data:
-    thermal_detail_json = json.load(json_data)
+""" get metrics from local json example (faster) """
+if os.environ.get('EXPORTER_LOCAL_METRICS'):
+    with open('./metrics/Chassis-embedded1.json') as json_data:
+        chassis_general_json = json.load(json_data)
+    with open('./metrics/PowerSupplies.json') as json_data:
+        power_detail_json = json.load(json_data)
+    with open('./metrics/Thermal.json') as json_data:
+        thermal_detail_json = json.load(json_data)
 
 IDRAC8_REDFISH_BASE_URL = '/redfish/v1'
 CHASSIS_URL = "/Chassis/System.Embedded.1"
@@ -23,10 +25,11 @@ class Chassis(object):
 
     """ list and parse chassis general information """
     def _get_link(self):
-        ret = self._conn.get(CHASSIS_URL)
-
-        """ uncomment for testing purpose (faster) """
-        ret = chassis_general_json
+        """ get metrics from local json example (faster) """
+        if os.environ.get('EXPORTER_LOCAL_METRICS'):
+            ret = chassis_general_json
+        else:
+            ret = self._conn.get(CHASSIS_URL)
         try:
             # Pages return 400
             #ret_link = ret['Links']['CooledBy']

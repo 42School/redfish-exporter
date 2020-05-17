@@ -1,11 +1,13 @@
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY, InfoMetricFamily
 import json
+import os
+from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY, InfoMetricFamily
 
-""" uncomment for testing purpose (faster) """
-#with open('./metrics/Controllers-raid-details.json') as json_data:
-#    controller_details_json = json.load(json_data)
-#with open('./metrics/Controllers-list.json') as json_data:
-#    controller_list_json = json.load(json_data)
+""" get local metrics for testing (faster) """
+if os.environ.get('EXPORTER_LOCAL_METRICS'):
+    with open('./metrics/Controllers-raid-details.json') as json_data:
+        controller_details_json = json.load(json_data)
+    with open('./metrics/Controllers-list.json') as json_data:
+        controller_list_json = json.load(json_data)
 
 IDRAC8_REDFISH_BASE_URL = '/redfish/v1'
 RAID_CTRL_URL = "/Systems/System.Embedded.1/Storage/Controllers"
@@ -21,15 +23,16 @@ class Raid(object):
 
     """ list and parse controllers """
     def _list(self):
-        ret = self._conn.get(RAID_CTRL_URL)
-        """ uncomment for testing purpose (faster) """
-        #ret = controller_list_json
+        if os.environ.get('EXPORTER_LOCAL_METRICS'):
+            ret = controller_list_json
+        else:
+            ret = self._conn.get(RAID_CTRL_URL)
+
         try:
             """ parse raid controller name """
             for member in ret['Members']:
                 raid_ctrl_url = member['@odata.id']
                 self._ctrl_list.append(raid_ctrl_url.replace(IDRAC8_REDFISH_BASE_URL + RAID_CTRL_URL + '/', ''))
-
         except KeyError as e:
             raise "Invalid dict key from redfish response: " + e
 
@@ -40,11 +43,11 @@ class Raid(object):
             self._details(ctrl)
 
     def _details(self, ctrl_name):
-
         """ get controllers info """
-        ctrl_status = self._conn.get(RAID_CTRL_URL + '/' + ctrl_name)
-        """ uncomment for testing purpose (faster) """
-        #ctrl_status = controller_details_json
+        if os.environ.get('EXPORTER_LOCAL_METRICS'):
+            ctrl_status = controller_details_json
+        else:
+            ctrl_status = self._conn.get(RAID_CTRL_URL + '/' + ctrl_name)
 
         try:
             ctrl = ctrl_status['Status']
