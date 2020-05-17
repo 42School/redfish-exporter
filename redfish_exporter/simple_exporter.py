@@ -57,7 +57,7 @@ class metricHandler:
             'redfish_exporter' # prefix for metrics name
         )
         """ test connection before getting metrics """
-        if os.environ.get('EXPORTER_LOCAL_METRICS'):
+        if not os.environ.get('EXPORTER_LOCAL_METRICS'):
             err, status = self.get_idrac_status()
             if err:
                 return Response(err, status=status)
