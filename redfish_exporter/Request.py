@@ -17,6 +17,7 @@ class Req():
         self._session = requests.Session()
         self._session.verify = self._verify
         self._session.auth = (username, password)
+        self._reset_ret()
 
         if username or password:
             self.set_http_basic_auth(username, password)
@@ -25,20 +26,38 @@ class Req():
     def set_http_basic_auth(self, username, password):
         self._session.auth = (username, password)
 
+    """ reset ret result """
+    def _reset_ret(self):
+        self.error = None
+        self.status = 200
+
     """ Close this connector and the associated HTTP session."""
     def close(self):
         self._session.close()
 
     def _req(self, method, path='', data=None):
         url = self._default_url + path
-        try:
-            response = self._session.request(method, url, data=data)
-            response.raise_for_status()
-        except requests.ConnectionError as e:
-            raise SystemExit(e)
+        self._reset_ret()
+        response = None
 
+        try:
+            response = self._session.request(method, url, data=data, timeout=2)
+            response.raise_for_status()
+            resp = response.json()
+        except requests.exceptions.ConnectionError as err:
+            self.error = str(err)
+            self.status = 503
+        except requests.exceptions.Timeout as err:
+            self.error = str(err)
+            self.status = 522
+        except requests.exceptions.RequestException as err:
+            self.error = str(err)
+            self.status = 500
+        except:
+            self.error = 'Internal error'
+            self.status = 500
         return response
 
-    def get(self, path="", data=None):
-        resp = self._req("GET", path, data=data)
-        return resp.json()
+    def get(self, path='', data=None):
+        resp = self._req('GET', path, data=data)
+        return resp, self.error, self.status
