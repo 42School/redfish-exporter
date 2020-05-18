@@ -24,8 +24,8 @@ class Collector(object):
         custom_label_values = []
 
         """ get raids metrics """
-        #raid = Raid(self._conn, self.prefix)
-        #raid_metrics = raid.parse_for_prom()
+        raid = Raid(self._conn, self.prefix)
+        raid_metrics = raid.parse_for_prom()
 
         """ get raids metrics """
         chassis = Chassis(self._conn, self.prefix)
@@ -40,8 +40,8 @@ class Collector(object):
         yield m
 
         """ add raid emtrics """
-        #for item in raid_metrics:
-        #    yield item
+        for item in raid_metrics:
+            yield item
 
         """ add chassis emtrics """
         for item in chassis_metrics:
