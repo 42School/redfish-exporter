@@ -56,7 +56,7 @@ class Raid(object):
             if ctrl['Health'] and ctrl['State']:
                 self.metrics[ctrl_name] = {
                     'health': ctrl['Health'],
-                    'status': ctrl['State'],
+                    'state': ctrl['State'],
                     'disks': []
                 }
 
@@ -105,21 +105,26 @@ class Raid(object):
         }
     """
     def parse_for_prom(self):
-        label_names = ['name', 'state', 'health']
+        label_names = ['name']
+        disk_label_names = ['name', 'controller']
         metrics = list()
 
         for metric_name, v in self.metrics.items():
-            """ add prefix define in collector call """
-            gauge = GaugeMetricFamily(self.prefix + '_controller', '', labels=label_names)
-
-            """ expose raid status """
-            gauge.add_metric([metric_name, v['status'], v['health']], self._cast(v['health']))
+            """ add prefix to metric and expose it """
+            gauge = GaugeMetricFamily(self.prefix + '_controller_health', '', labels=label_names)
+            gauge.add_metric([metric_name], self._cast(v['health']))
+            metrics.append(gauge)
+            gauge = GaugeMetricFamily(self.prefix + '_controller_state', '', labels=label_names)
+            gauge.add_metric([metric_name], self._cast(v['state']))
             metrics.append(gauge)
 
-            """ expose disks status """
+            """ expose disks state """
             for disk in v['disks']:
-                gauge = GaugeMetricFamily(self.prefix + '_controller_disk', '', labels=label_names + ['disk'])
-                gauge.add_metric([metric_name, disk['state'], disk['health'], disk['name']], self._cast(disk['health']))
+                gauge = GaugeMetricFamily(self.prefix + '_disk_health', '', labels=disk_label_names)
+                gauge.add_metric([disk['name'], metric_name], self._cast(disk['health']))
+                metrics.append(gauge)
+                gauge = GaugeMetricFamily(self.prefix + '_disk_state', '', labels=disk_label_names)
+                gauge.add_metric([disk['name'], metric_name], self._cast(disk['state']))
                 metrics.append(gauge)
 
         return metrics
