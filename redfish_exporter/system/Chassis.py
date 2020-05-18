@@ -69,7 +69,7 @@ class Chassis(object):
             for temp in thermal_status['Temperatures']:
                 self._metrics['thermal']['location'].append({
                     'name': temp['MemberID'].replace(IDRAC8_REDFISH_MEMBERID, ''),
-                    'celsius': temp['ReadingCelsius'],
+                    'degres': temp['ReadingCelsius'],
                     'limit': temp['UpperThresholdCritical']
                 })
 
@@ -110,12 +110,39 @@ class Chassis(object):
                 self._metrics['fan']['list'].append({
                     'name': temp['FanName'],
                     'rpm': temp['Reading'],
+                    'low_limit': temp['LowerThresholdCritical'],
                     'health': temp['Status']['Health'],
                     'state': temp['Status']['State']
                 })
 
         except KeyError as e:
             raise e
+
+    def _parse_thermal_metrics(metrics):
+        thermal = self._metrics['thermal']
+        thermal_label_names = ['name', 'limit']
+
+        """ add prefix define in collector call """
+        gauge = GaugeMetricFamily(self.prefix + '_thermal', '', labels=thermal_label_names)
+
+        for location in thermal['location']:
+            gauge = GaugeMetricFamily(self.prefix + '_thermal_location', '', labels=thermal_label_names)
+            gauge.add_metric(['thermal', location['name'], location['limit']], int(location['degres']))
+            metrics.append(gauge)
+
+        return metrics
+
+    def _parse_power_metrics(metrics):
+        powersupplies_label_names = ['name', 'health', 'state', 'power_capacity']
+        power_label_names = ['health', 'state', 'limit', 'average', 'maxconsumed', 'minconsumed']
+        power = self._metrics['power']
+        """ add prefix define in collector call """
+        gauge = GaugeMetricFamily(self.prefix + '_power', '', labels=power_label_names)
+
+        for powersupplie in thermal['powersupplies']:
+            gauge = GaugeMetricFamily(self.prefix + '_thermal_location', '', labels=powersupplies_label_names)
+            gauge.add_metric(['thermal', powersupplie['name'], location['limit']], int(location['degres']))
+            metrics.append(gauge)
 
     """ transform metric value into valid prom metric value """
     def _cast(self, value):
@@ -135,7 +162,7 @@ class Chassis(object):
             'thermal': {
                 'location': [{
                     'name': 'InletTemp',
-                    'celsius': 20,
+                    'degres': 20,
                     'limit': 75
                 },{
                     ...
@@ -154,28 +181,33 @@ class Chassis(object):
                         'health': 'OK',
                         'state': 'Enabled'
                         'power_capacity': 750
+                },{
+                    ...
+                    ...
                 }]
             },
-            'fan': {
+            'fan':
+                'redundancy_health': 'OK',
+                'redundancy_state': 'Enabled',
+                'list': [{
+                    'name': "fan1",
+                    'rpm': 6300,
+                    'low_limit': 800,
+                    'health': 'OK',
+                    'state': 'Enabled'
+                    },{
+                        ...
+                        ...
+                    }
+                ]
             }
-        }
     """
     def parse_for_prom(self):
-        label_names = ['name', 'state', 'health']
+        fan_label_names = ['redundancy_health', 'redundancy_state']
+        fanlist_label_names = ['name', 'rpm', 'low_limit', 'health', 'state']
         metrics = list()
 
-        for metric_name, v in self._metrics.items():
-            """ add prefix define in collector call """
-            gauge = GaugeMetricFamily(self.prefix + '_controller', '', labels=label_names)
-
-            """ expose raid status """
-            gauge.add_metric([metric_name, v['status'], v['health']], self._cast(v['health']))
-            metrics.append(gauge)
-
-            """ expose disks status """
-            for disk in v['disks']:
-                gauge = GaugeMetricFamily(self.prefix + '_controller_disk', '', labels=label_names + ['disk'])
-                gauge.add_metric([metric_name, disk['state'], disk['health'], disk['name']], self._cast(disk['health']))
-                metrics.append(gauge)
+        metrics = self._parse_thermal_metrics(metrics)
+        metrics = self._parse_power_metrics(metrics)
 
         return metrics
