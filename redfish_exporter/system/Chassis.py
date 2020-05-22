@@ -1,36 +1,45 @@
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY, InfoMetricFamily
 import json
-import os
+import logging
+from prometheus_client.core import GaugeMetricFamily
 
-""" get metrics from local json example (faster) """
-if os.environ.get('EXPORTER_LOCAL_METRICS'):
-    with open('./metrics/Chassis-embedded1.json') as json_data:
-        chassis_general_json = json.load(json_data)
-    with open('./metrics/PowerSupplies.json') as json_data:
-        power_detail_json = json.load(json_data)
-    with open('./metrics/Thermal.json') as json_data:
-        thermal_detail_json = json.load(json_data)
+logger = logging.getLogger(__name__)
 
 IDRAC8_REDFISH_BASE_URL = '/redfish/v1'
 IDRAC8_REDFISH_MEMBERID = 'iDRAC.Embedded.1#'
 CHASSIS_URL = "/Chassis/System.Embedded.1"
 
 class Chassis(object):
-    def __init__(self, conn, prefix):
+    def __init__(self, conn, prefix, config):
         self._conn = conn
         self.prefix = prefix
         self._metrics = {}
         self._link_list = {}
+        self._config = config
+        self._chassis_general_json = {}
+        self._power_detail_json = {}
+        self._thermal_detail_json = {}
+        """ get metrics from local json example (faster) """
+        if config['local']:
+            with open('./metrics/Chassis-embedded1.json') as json_data:
+                self._chassis_general_json = json.load(json_data)
+            with open('./metrics/PowerSupplies.json') as json_data:
+                self._power_detail_json = json.load(json_data)
+            with open('./metrics/Thermal.json') as json_data:
+                self._thermal_detail_json = json.load(json_data)
+
         self._get_link()
         self._get_metrics()
 
     """ list and parse chassis general information """
     def _get_link(self):
         """ get metrics from local json example (faster) """
-        if os.environ.get('EXPORTER_LOCAL_METRICS'):
-            ret = chassis_general_json
+        if self._config['local']:
+            ret = self._chassis_general_json
         else:
-            ret = self._conn.get(CHASSIS_URL)
+            ret, err, status = self._conn.get(CHASSIS_URL)
+            if err:
+                logger.error(err)
+                raise Exception(err)
         try:
             # Pages return 400
             #ret_link = ret['Links']['CooledBy']
@@ -44,7 +53,8 @@ class Chassis(object):
             self._link_list['thermal'] = ret['Thermal']['@odata.id'].replace(IDRAC8_REDFISH_BASE_URL, '')
 
         except KeyError:
-            raise e
+            logger.error("Key error")
+            raise Exception("Key error")
 
     def _get_metrics(self):
         self._details()
@@ -58,10 +68,13 @@ class Chassis(object):
             #    fan_status = self._conn.get(fan_link)
  
             """ get detailed metrics for thermal """
-            if os.environ.get('EXPORTER_LOCAL_METRICS'):
-                thermal_status = thermal_detail_json
+            if self._config['local']:
+                thermal_status = self._thermal_detail_json
             else:
-                thermal_status = self._conn.get(self._link_list['thermal'])
+                thermal_status, err, status = self._conn.get(self._link_list['thermal'])
+                if err:
+                    logger.error(err)
+                    raise Exception(err)
 
             self._metrics['thermal'] = {
                 'location': []
@@ -74,10 +87,13 @@ class Chassis(object):
                 })
 
             """ get detailed metrics for power """
-            if os.environ.get('EXPORTER_LOCAL_METRICS'):
-                power_status = power_detail_json
+            if self._config['local']:
+                power_status = self._power_detail_json
             else:
-                power_status = self._conn.get(self._link_list['power'])
+                power_status, err, status = self._conn.get(self._link_list['power'])
+                if err:
+                    logger.error(err)
+                    raise Exception(err)
             """
                 Get redundancy info (same for both powersuppliies)
                 Basic metric consumption
@@ -114,46 +130,19 @@ class Chassis(object):
                     'health': temp['Status']['Health'],
                     'state': temp['Status']['State']
                 })
-
         except KeyError as e:
             raise e
 
-    def _parse_thermal_metrics(metrics):
-        thermal = self._metrics['thermal']
-        thermal_label_names = ['name', 'limit']
-
-        """ add prefix define in collector call """
-        gauge = GaugeMetricFamily(self.prefix + '_thermal', '', labels=thermal_label_names)
-
-        for location in thermal['location']:
-            gauge = GaugeMetricFamily(self.prefix + '_thermal_location', '', labels=thermal_label_names)
-            gauge.add_metric(['thermal', location['name'], location['limit']], int(location['degres']))
-            metrics.append(gauge)
-
-        return metrics
-
-    def _parse_power_metrics(metrics):
-        powersupplies_label_names = ['name', 'health', 'state', 'power_capacity']
-        power_label_names = ['health', 'state', 'limit', 'average', 'maxconsumed', 'minconsumed']
-        power = self._metrics['power']
-        """ add prefix define in collector call """
-        gauge = GaugeMetricFamily(self.prefix + '_power', '', labels=power_label_names)
-
-        for powersupplie in thermal['powersupplies']:
-            gauge = GaugeMetricFamily(self.prefix + '_thermal_location', '', labels=powersupplies_label_names)
-            gauge.add_metric(['thermal', powersupplie['name'], location['limit']], int(location['degres']))
-            metrics.append(gauge)
-
     """ transform metric value into valid prom metric value """
     def _cast(self, value):
-        valid = ["OK", "Enabled"]
-        invalid = ["", "KO", "Disabled"]
+        valid = ['Ok', 'OK', 'Enabled']
+        invalid = ['', 'KO', 'Disabled', 'Critical', 'None', '0', None]
 
         if value in valid:
             return 1
-        elif valid in invalid:
+        elif value in invalid:
             return 0
-        return value
+        return float(value)
 
     """ 
         metrics must be on a specific format for prometheus
@@ -203,11 +192,44 @@ class Chassis(object):
             }
     """
     def parse_for_prom(self):
-        fan_label_names = ['redundancy_health', 'redundancy_state']
-        fanlist_label_names = ['name', 'rpm', 'low_limit', 'health', 'state']
-        metrics = list()
+        fans = self._metrics['fan']
+        """ return thermal metrics """
+        gauge = GaugeMetricFamily(self.prefix + '_fan_redundancy', '', labels=['type'])
+        gauge.add_metric(['health'], self._cast(fans['redundancy_health']))
+        gauge.add_metric(['state'], self._cast(fans['redundancy_state']))
+        yield gauge
 
-        metrics = self._parse_thermal_metrics(metrics)
-        metrics = self._parse_power_metrics(metrics)
+        gauge = GaugeMetricFamily(self.prefix + '_fan', '', labels=['name', 'low_limit', 'type'])
+        for fan in fans['list']:
+            gauge.add_metric([fan['name'], str(fan['low_limit']), 'rpm'], self._cast(fan['rpm']))
+            gauge.add_metric([fan['name'], str(fan['low_limit']), 'health'], self._cast(fan['health']))
+            gauge.add_metric([fan['name'], str(fan['low_limit']), 'state'], self._cast(fan['state']))
+        yield gauge
 
-        return metrics
+        thermal = self._metrics['thermal']
+        """ return thermal metrics """
+        gauge = GaugeMetricFamily(self.prefix + '_thermal_location', '', labels=['name', 'limit'])
+
+        for location in thermal['location']:
+            gauge.add_metric([location['name'], str(location['limit'])], location['degres'])
+        yield gauge
+
+        power = self._metrics['power']
+        """ return power metrics """
+        gauge = GaugeMetricFamily(self.prefix + '_power', '', labels=['type'])
+        gauge.add_metric(['health'], self._cast(power['health']))
+        gauge.add_metric(['state'], self._cast(power['state']))
+        yield gauge
+        gauge = GaugeMetricFamily(self.prefix + '_power_comsumption', 'watt consumption', labels=['type', 'unit', 'limit'])
+        gauge.add_metric(['average', 'watt', str(power['limit'])], self._cast(power['average']))
+        gauge.add_metric(['maxconsumed', 'watt', str(power['limit'])], self._cast(power['maxconsumed']))
+        gauge.add_metric(['minconsumed', 'watt', str(power['limit'])], self._cast(power['minconsumed']))
+        yield gauge
+
+        """ return power supply metrics """
+        gauge = GaugeMetricFamily(self.prefix + '_power_supply', '', labels=['type', 'name'])
+        for powersupply in power['powersupplies']:
+            gauge.add_metric(['health', powersupply['name']], self._cast(powersupply['health']))
+            gauge.add_metric(['state', powersupply['name']], self._cast(powersupply['state']))
+            gauge.add_metric(['power_capacity', powersupply['name']], self._cast(powersupply['power_capacity']))
+        yield gauge

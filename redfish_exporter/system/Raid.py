@@ -1,32 +1,43 @@
 import json
 import os
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY, InfoMetricFamily
+import logging
+from prometheus_client.core import GaugeMetricFamily
 
-""" get local metrics for testing (faster) """
-if os.environ.get('EXPORTER_LOCAL_METRICS'):
-    with open('./metrics/Controllers-raid-details.json') as json_data:
-        controller_details_json = json.load(json_data)
-    with open('./metrics/Controllers-list.json') as json_data:
-        controller_list_json = json.load(json_data)
+logger = logging.getLogger(__name__)
 
 IDRAC8_REDFISH_BASE_URL = '/redfish/v1'
 RAID_CTRL_URL = "/Systems/System.Embedded.1/Storage/Controllers"
 
 class Raid(object):
-    def __init__(self, conn, prefix):
+    def __init__(self, conn, prefix, config):
         self._conn = conn
         self.prefix = prefix
         self.metrics = {}
         self._ctrl_list = []
+        self._config = config
+        self._controller_details_json = {}
+        self._controller_list_json = {}
+
+        """ get local metrics for testing (faster) """
+        if config['local']:
+            with open('./metrics/Controllers-raid-details.json') as json_data:
+                self._controller_details_json = json.load(json_data)
+            with open('./metrics/Controllers-list.json') as json_data:
+                self._controller_list_json = json.load(json_data)
+
         self._list()
         self._get_metrics()
 
     """ list and parse controllers """
     def _list(self):
-        if os.environ.get('EXPORTER_LOCAL_METRICS'):
-            ret = controller_list_json
+        err = None
+        if self._config['local']:
+            ret = self._controller_list_json
         else:
-            ret = self._conn.get(RAID_CTRL_URL)
+            ret, err, status = self._conn.get(RAID_CTRL_URL)
+            if err:
+                logging.error(err)
+                raise Exception(err)
 
         try:
             """ parse raid controller name """
@@ -34,7 +45,8 @@ class Raid(object):
                 raid_ctrl_url = member['@odata.id']
                 self._ctrl_list.append(raid_ctrl_url.replace(IDRAC8_REDFISH_BASE_URL + RAID_CTRL_URL + '/', ''))
         except KeyError as e:
-            raise "Invalid dict key from redfish response: " + e
+            logging.error(e)
+            raise Exception(e)
 
     def _get_metrics(self):
 
@@ -44,10 +56,13 @@ class Raid(object):
 
     def _details(self, ctrl_name):
         """ get controllers info """
-        if os.environ.get('EXPORTER_LOCAL_METRICS'):
-            ctrl_status = controller_details_json
+        if self._config['local']:
+            ctrl_status = self._controller_details_json
         else:
-            ctrl_status = self._conn.get(RAID_CTRL_URL + '/' + ctrl_name)
+            ctrl_status, err, status = self._conn.get(RAID_CTRL_URL + '/' + ctrl_name)
+            if err:
+                logging.error(err)
+                raise Exception(err)
 
         try:
             ctrl = ctrl_status['Status']
@@ -71,12 +86,14 @@ class Raid(object):
                     'state': disk_status['State']
                 })
         except KeyError:
-            raise "Invalid dict key from redfish response: "
+            msg = "Invalid dict key from redfish response"
+            logging.error(msg)
+            raise Exception(msg)
 
     """ transform metric value into valid prom metric value """
     def _cast(self, value):
-        valid = ["OK", "Enabled"]
-        invalid = ["", "KO", "Disabled"]
+        valid = ['OK', 'Enabled', True, 'True']
+        invalid = ['', 'KO', 'Disabled', 'Critical', None, 'None']
 
         if value in valid:
             return 1
@@ -105,26 +122,20 @@ class Raid(object):
         }
     """
     def parse_for_prom(self):
-        label_names = ['name']
-        disk_label_names = ['name', 'controller']
+        label_names = ['name', 'type']
+        disk_label_names = ['name', 'controller', 'type']
         metrics = list()
 
         for metric_name, v in self.metrics.items():
             """ add prefix to metric and expose it """
-            gauge = GaugeMetricFamily(self.prefix + '_controller_health', '', labels=label_names)
-            gauge.add_metric([metric_name], self._cast(v['health']))
-            metrics.append(gauge)
-            gauge = GaugeMetricFamily(self.prefix + '_controller_state', '', labels=label_names)
-            gauge.add_metric([metric_name], self._cast(v['state']))
-            metrics.append(gauge)
+            gauge = GaugeMetricFamily(self.prefix + '_controller', '', labels=label_names)
+            gauge.add_metric([metric_name, 'health'], self._cast(v['health']))
+            gauge.add_metric([metric_name, 'state'], self._cast(v['state']))
+            yield gauge
 
             """ expose disks state """
+            gauge = GaugeMetricFamily(self.prefix + '_disk_health', '', labels=disk_label_names)
             for disk in v['disks']:
-                gauge = GaugeMetricFamily(self.prefix + '_disk_health', '', labels=disk_label_names)
-                gauge.add_metric([disk['name'], metric_name], self._cast(disk['health']))
-                metrics.append(gauge)
-                gauge = GaugeMetricFamily(self.prefix + '_disk_state', '', labels=disk_label_names)
-                gauge.add_metric([disk['name'], metric_name], self._cast(disk['state']))
-                metrics.append(gauge)
-
-        return metrics
+                gauge.add_metric([disk['name'], metric_name, 'health'], self._cast(disk['health']))
+                gauge.add_metric([disk['name'], metric_name, 'state'], self._cast(disk['state']))
+            yield gauge
