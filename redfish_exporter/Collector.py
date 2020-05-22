@@ -1,19 +1,20 @@
-__version__ = '0.1'
-
 from prometheus_client import Metric
 from .Request import Req
 from .system.Raid import Raid
 from .system.Chassis import Chassis
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY, InfoMetricFamily
+from prometheus_client.core import GaugeMetricFamily
+
+__version__ = 1.0
 
 class Collector(object):
-    def __init__(self, service, sys_version, conn, prefix):
+    def __init__(self, service, sys_version, conn, prefix, config):
         self._service = service
         self._sys_version = sys_version
         self._conn = conn
         self._labels = {}
         self.prefix = prefix
         self._set_labels()
+        self._config = config
 
     def _set_labels(self):
         self._labels.update({'service': self._service})
@@ -24,12 +25,10 @@ class Collector(object):
         custom_label_values = []
 
         """ get raids metrics """
-        raid = Raid(self._conn, self.prefix)
-        raid_metrics = raid.parse_for_prom()
+        raid = Raid(self._conn, self.prefix, self._config)
 
         """ get raids metrics """
-        chassis = Chassis(self._conn, self.prefix)
-        chassis_metrics = chassis.parse_for_prom()
+        chassis = Chassis(self._conn, self.prefix, self._config)
 
         """ redfish exporter version """
         m = GaugeMetricFamily(
@@ -38,11 +37,9 @@ class Collector(object):
             labels=[] + custom_label_names)
         m.add_metric([__version__] + custom_label_values, __version__)
         yield m
-
+        
         """ add raid emtrics """
-        for item in raid_metrics:
-            yield item
-
+        yield from raid.parse_for_prom()
+        
         """ add chassis emtrics """
-        for item in chassis_metrics:
-            yield item
+        yield from chassis.parse_for_prom()

@@ -2,6 +2,9 @@ import requests
 import json
 import re
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 """
     Main request class,
@@ -41,9 +44,9 @@ class Req():
         response = None
 
         try:
-            response = self._session.request(method, url, data=data, timeout=2)
+            response = self._session.request(method, url, data=data, timeout=10)
             response.raise_for_status()
-            resp = response.json()
+            response = response.json()
         except requests.exceptions.ConnectionError as err:
             self.error = str(err)
             self.status = 503
