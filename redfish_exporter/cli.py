@@ -1,92 +1,105 @@
 import json
 import logging
-import traceback
+import yaml
+import time
+import sys
+import os
+import logging.config
+import pkg_resources
 
-from flask import Flask, request, Response
+from argparse import ArgumentParser
 from time import strftime
 from datetime import datetime, timezone
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from logging.handlers import RotatingFileHandler
-from logging.config import dictConfig
+from prometheus_client import push_to_gateway, generate_latest, pushadd_to_gateway
 
-from .simple_exporter import metricHandler
+from .Request import Req
+from .Collector import Collector
 
-config_file = "./config.yaml"
+config_logging_file = './logging-config.ini'
+IDRAC_VERSION = ('idrac8', 'idrac9')
+config = {
+    'local': None,
+    'ip': '127.0.0.1',
+    'port': 9110
+}
+__version__ = 1.0
 
-""" Configure logging """
-dictConfig({
-    "version": 1,
-    "formatters": {"default": {
-        "format": "[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
-    }},
-    "handlers": {"wsgi": {
-        "class": "logging.StreamHandler",
-        "stream": "ext://flask.logging.wsgi_errors_stream",
-        "formatter": "default"
-    }},
-    "root": {
-        "level": "INFO",
-        "handlers": ["wsgi"]
-    }
-})
+""" TODO: CHECK CONFIG FILE VALIDITY """
+ 
+""" test all remote url and credentials """
+def get_idrac_status(hosts):
+    for target, host in hosts['hosts'].items():
+        req = Req(host['proto'], target, host['username'], host['password'], host['verify'])
+        res, err, status = req.get()
+        if err:
+            return err, status
+    return None, 200
 
-# Create my app
-app = Flask(__name__)
-app.debug = 'DEBUG'
+""" parse yaml config file """
+def parse_config(config_file):
+    with open(config_file, 'r') as stream:
+        try:
+            config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            logging.error(exc)
 
-@app.route('/<string:target>', methods = ["GET"])
-def metrics(target):
-    exporter = metricHandler(config_file)
-    return exporter.metrics(target) 
+    return config
 
-""" middleware exception """
-@app.errorhandler(Exception)
-def exceptions(e):
-    """ Logging after every Exception. """
-    ts = strftime("[%Y-%b-%d %H:%M]")
-    tb = traceback.format_exc()
-    logger.error("%s %s %s %s %s 5xx INTERNAL SERVER ERROR\n%s",
-                  ts,
-                  request.remote_addr,
-                  request.method,
-                  request.scheme,
-                  request.full_path,
-                  tb)
+def scrapeTarget(targets, config):
+    for key, value in targets['hosts'].items():
+        metrics(key, value, config)
 
-    message = "Internal Server Error"
-    response = Response(message, 503)
-    return response
+def metrics(target, target_info, config):
+    """ create collector for each remote """
+    if target_info['version'] in IDRAC_VERSION:
+        conn = Req(target_info['proto'], target, target_info['username'], target_info['password'], target_info['verify'])
 
-""" Logging after every request. """
-@app.after_request
-def after_request(response):
-    """ Add basic HTTP API header before executing requests """
-    response.headers["Access-Control-Allow-Origin"] = "*";
-    response.headers["Access-Control-Allow-Headers"] = "Origin, X-Requested-With, Content-Type, Accept";
-    response.headers["Access-Control-Allow-Methods"] = "PUT,POST,GET,DELETE,OPTIONS";
+    """ collect data throw redfish library sushi """
+    registry = Collector(
+        'system', # service name
+        target_info['version'], # iDRAC version
+        conn, # conn object from Req
+        'redfish_exporter', # prefix for metrics name
+        config # pushgateway config
+    )
 
-    """ log every request """
-    current_date = datetime.now(timezone.utc).astimezone().strftime('[%Y-%b-%d %H:%M]')
+    metric = generate_latest(registry)
+    pushadd_to_gateway(config['ip'] + ':' + str(config['port']), job='superjob', registry=registry)
 
-    #if '50' not in response.status:
-    logger.info('%s %s %s %s %s',
-                request.remote_addr,
-                request.method,
-                request.scheme,
-                request.full_path,
-                response.status)
-
-    return response
-
+logging.config.fileConfig(config_logging_file)
 """ maxBytes to small number, in order to demonstrate the generation of multiple log files (backupCount). """
 handler = RotatingFileHandler("redfish-exporter.log", maxBytes=1024 * 1024 * 100, backupCount=3)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 """ uncomment this line to log requests in file """
 logger.addHandler(handler)
 
-# Add prometheus wsgi middleware to route /metrics requests
-app_dispatch = DispatcherMiddleware(app, {
-    '/metrics': app
-})
+def main(args=None):
+    parser = ArgumentParser()
+    parser.add_argument('--local', default=None, help='If set, metrics are get form local static json files (testing)')
+    parser.add_argument('--config', nargs='?', default='./config.yaml', help='Path to configuration file with targets (config.yml)')
+    parser.add_argument('--port', nargs='?', type=int, default='9091', help='Pushgateway remote port')
+    parser.add_argument('--ip', nargs='?', default='127.0.0.1', help='Pushgateway ip to which exporter will send metrics')
+    params = parser.parse_args(args if args is None else sys.argv[1:])
+    targets = parse_config(params.config)
+
+    """ check if target must be scrapped """
+    if params.local:
+        config['local'] = params.local
+    if params.port:
+        config['port'] = params.port
+    if params.ip:
+        config['ip'] = params.ip
+    else:
+        """ test remote connection before getting metrics """
+        err, status = get_idrac_status(targets)
+        while err:
+            logger.error(err)
+            time.sleep(5)
+            err, status = get_idrac_status(targets)
+
+    """ start deamon and scrape metrics every x seconds """
+    while True:
+        scrapeTarget(targets, config)
+        time.sleep(15)
