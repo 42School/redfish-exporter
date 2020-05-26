@@ -1,4 +1,7 @@
 hosts:
     10.10.10.10:
-        username: user
-        password: password
+    username: user
+    password: password
+    proto: https
+    version: idrac8
+    verify: False

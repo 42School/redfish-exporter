@@ -102,4 +102,4 @@ def main(args=None):
     """ start deamon and scrape metrics every x seconds """
     while True:
         scrapeTarget(targets, config)
-        time.sleep(15)
+        time.sleep(2 * 60)

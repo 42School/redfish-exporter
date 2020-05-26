@@ -44,7 +44,7 @@ class Req():
         response = None
 
         try:
-            response = self._session.request(method, url, data=data, timeout=10)
+            response = self._session.request(method, url, data=data, timeout=15)
             response.raise_for_status()
             response = response.json()
         except requests.exceptions.ConnectionError as err:
