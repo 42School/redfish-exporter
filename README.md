@@ -54,7 +54,7 @@ python __init__.py	--config ./config.yaml \
 			--port 9091 \
 			--ip 127.0.0.1 \
 			--user pushgateway \
-			--password pushgateway-password
+			--password <pushgateway-basic-password>
 ```
 
 Copy systemd file in right place:

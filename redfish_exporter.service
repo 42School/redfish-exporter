@@ -1,0 +1,31 @@
+[Unit]
+Description=Redfish Exporter
+After=network-online.target
+StartLimitInterval=0
+
+[Service]
+Type=simple
+User=node-exp
+Group=node-exp
+ExecStart=/var/lib/redfish-exporter/venv/bin/python /var/lib/redfish-exporter/__init__.py \
+	--config /var/lib/redfish-exporter/config.yaml \
+	--port 9091 \
+	--ip 127.0.0.1 \
+	--user pushgateway \
+	--password <pushgateway-basic-password>
+
+SyslogIdentifier=redfish_exporter
+Restart=always
+RestartSec=1
+
+PrivateTmp=yes
+ProtectHome=yes
+NoNewPrivileges=yes
+
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=yes
+
+[Install]
+WantedBy=multi-user.target
