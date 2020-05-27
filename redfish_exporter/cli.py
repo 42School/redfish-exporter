@@ -7,21 +7,25 @@ import os
 import logging.config
 import pkg_resources
 
+from os import path
 from argparse import ArgumentParser
 from time import strftime
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from prometheus_client import push_to_gateway, generate_latest, pushadd_to_gateway
+from prometheus_client.exposition import basic_auth_handler
 
 from .Request import Req
 from .Collector import Collector
 
-config_logging_file = './logging-config.ini'
+config_logging_file = path.dirname(__file__) + '/../logging-config.ini'
 IDRAC_VERSION = ('idrac8', 'idrac9')
 config = {
     'local': None,
     'ip': '127.0.0.1',
-    'port': 9110
+    'port': 9110,
+    'user': None,
+    'password': None,
 }
 __version__ = 1.0
 
@@ -50,6 +54,12 @@ def scrapeTarget(targets, config):
     for key, value in targets['hosts'].items():
         metrics(key, value, config)
 
+""" use for basic auth to pushgateway """
+def my_auth_handler(url, method, timeout, headers, data):
+    username = config['user']
+    password = config['password']
+    return basic_auth_handler(url, method, timeout, headers, data, username, password)
+
 def metrics(target, target_info, config):
     """ create collector for each remote """
     if target_info['version'] in IDRAC_VERSION:
@@ -65,15 +75,10 @@ def metrics(target, target_info, config):
     )
 
     metric = generate_latest(registry)
-    pushadd_to_gateway(config['ip'] + ':' + str(config['port']), job='superjob', registry=registry)
+    pushadd_to_gateway(config['ip'] + ':' + str(config['port']), job='superjob', registry=registry, handler=my_auth_handler)
 
 logging.config.fileConfig(config_logging_file)
-""" maxBytes to small number, in order to demonstrate the generation of multiple log files (backupCount). """
-handler = RotatingFileHandler("redfish-exporter.log", maxBytes=1024 * 1024 * 100, backupCount=3)
 logger = logging.getLogger(__name__)
-
-""" uncomment this line to log requests in file """
-logger.addHandler(handler)
 
 def main(args=None):
     parser = ArgumentParser()
@@ -81,6 +86,8 @@ def main(args=None):
     parser.add_argument('--config', nargs='?', default='./config.yaml', help='Path to configuration file with targets (config.yml)')
     parser.add_argument('--port', nargs='?', type=int, default='9091', help='Pushgateway remote port')
     parser.add_argument('--ip', nargs='?', default='127.0.0.1', help='Pushgateway ip to which exporter will send metrics')
+    parser.add_argument('--user', nargs='?', default='pushgateway', help='Pushgateway user for basic auth')
+    parser.add_argument('--password', nargs='?', default='pushgateway', help='Pushgateway password for basic auth')
     params = parser.parse_args(args if args is None else sys.argv[1:])
     targets = parse_config(params.config)
 
@@ -91,6 +98,10 @@ def main(args=None):
         config['port'] = params.port
     if params.ip:
         config['ip'] = params.ip
+    if params.user:
+        config['user'] = params.user
+    if params.password:
+        config['password'] = params.password
     else:
         """ test remote connection before getting metrics """
         err, status = get_idrac_status(targets)
