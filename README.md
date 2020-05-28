@@ -12,6 +12,8 @@ Debian 10
 Python 3.7
 ```
 
+### Follow [thoses steps](./IDRAC_USER_CREATION.md) for iDRAC user creation
+
 ### Installation
 Go into prometheus VM
 Clone project in `/var/lib/` directory:
