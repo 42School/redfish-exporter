@@ -6,6 +6,7 @@ import sys
 import os
 import logging.config
 import pkg_resources
+import urllib
 
 from os import path
 from argparse import ArgumentParser
@@ -60,14 +61,29 @@ def my_auth_handler(url, method, timeout, headers, data):
     password = config['password']
     return basic_auth_handler(url, method, timeout, headers, data, username, password)
 
+""" Try connexion, exit if cant """
+def testPushgatewayConnection(conn, version, config):
+    registry = Collector('test_connection', version, conn, 'redfish_exporter', config)
+
+    try:
+        metric = generate_latest(registry)
+        pushadd_to_gateway(config['ip'] + ':' + str(config['port']), job='push_to_push', registry=registry, handler=my_auth_handler)
+    except Exception as e:
+        logger.error("Can't push to '" + config['ip'] + "' " + str(e))
+        sys.exit(0)
+
 def metrics(target, target_info, config):
+    conn = Req(target_info['proto'], target, target_info['username'], target_info['password'], target_info['verify'])
+
+    testPushgatewayConnection(conn, target_info['version'], config)
+
     """ create collector for each remote """
-    if target_info['version'] in IDRAC_VERSION:
-        conn = Req(target_info['proto'], target, target_info['username'], target_info['password'], target_info['verify'])
+    if target_info['version'] not in IDRAC_VERSION:
+        raise Exception('Invalid idrac version for target: ' + target)
 
     """ collect data throw redfish library sushi """
     registry = Collector(
-        'system', # service name
+        'scrape', # service name
         target_info['version'], # iDRAC version
         conn, # conn object from Req
         'redfish_exporter', # prefix for metrics name
@@ -75,7 +91,9 @@ def metrics(target, target_info, config):
     )
 
     metric = generate_latest(registry)
-    pushadd_to_gateway(config['ip'] + ':' + str(config['port']), job='superjob', registry=registry, handler=my_auth_handler)
+    pushadd_to_gateway(config['ip'] + ':' + str(config['port']), job=target_info['name'], registry=registry, handler=my_auth_handler)
+
+    logger.info('Succefull metrics push')
 
 logging.config.fileConfig(config_logging_file)
 logger = logging.getLogger(__name__)
@@ -112,5 +130,12 @@ def main(args=None):
 
     """ start deamon and scrape metrics every x seconds """
     while True:
-        scrapeTarget(targets, config)
-        time.sleep(2 * 60)
+        try:
+            scrapeTarget(targets, config)
+        except Exception as e:
+            logger.error("Can't scrape remote target: " + str(e))
+        """ sleep time must be proportional to target number """
+        time.sleep(len(targets['hosts'].items()) * 60)
+
+if __name__ == "__main__":
+    main()

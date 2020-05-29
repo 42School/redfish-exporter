@@ -2,9 +2,6 @@ import requests
 import json
 import re
 import sys
-import logging
-
-logger = logging.getLogger(__name__)
 
 """
     Main request class,
@@ -56,8 +53,8 @@ class Req():
         except requests.exceptions.RequestException as err:
             self.error = str(err)
             self.status = 500
-        except:
-            self.error = 'Internal error'
+        except Exception as err:
+            self.error = str(err)
             self.status = 500
         return response
 

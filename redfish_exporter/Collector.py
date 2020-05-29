@@ -24,19 +24,22 @@ class Collector(object):
         custom_label_names = []
         custom_label_values = []
 
-        """ get raids metrics """
-        raid = Raid(self._conn, self.prefix, self._config)
-
-        """ get raids metrics """
-        chassis = Chassis(self._conn, self.prefix, self._config)
-
         """ redfish exporter version """
         m = GaugeMetricFamily(
             self.prefix + '_version',
             'Version of redfish_exporter running',
             labels=[] + custom_label_names)
         m.add_metric([__version__] + custom_label_values, __version__)
+
+        if self._service is 'test_connection':
+            return m
+
         yield m
+        """ get raids metrics """
+        raid = Raid(self._conn, self.prefix, self._config)
+
+        """ get raids metrics """
+        chassis = Chassis(self._conn, self.prefix, self._config)
         
         """ add raid emtrics """
         yield from raid.parse_for_prom()
