@@ -7,7 +7,8 @@ StartLimitInterval=0
 Type=simple
 User=node-exp
 Group=node-exp
-ExecStart=/var/lib/redfish-exporter/venv/bin/python /var/lib/redfish-exporter/__init__.py \
+Environment="PYTHONPATH=/var/lib/redfish-exporter"
+ExecStart=/var/lib/redfish-exporter/venv/bin/python -m redfish_exporter \
 	--config /var/lib/redfish-exporter/config.yaml \
 	--port 9091 \
 	--ip 127.0.0.1 \
