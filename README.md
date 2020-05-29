@@ -24,6 +24,7 @@ git clone https://github.com/42School/redfish_exporter
 
 Create user for running exporter (or take existing `node-exp`):
 ```
+useradd my_new_user -s /sbin/nologin
 ```
 
 Give new directory specific rights for particular user (`node-exp` or previous created)
