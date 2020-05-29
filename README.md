@@ -47,16 +47,16 @@ Create virtualenv and install dependencies:
 ```
 python3.7 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+python setup.py install
 ```
 
 Run the exporter to make sure everything's good:
 ```
-python __init__.py	--config ./config.yaml \
-			--port 9091 \
-			--ip 127.0.0.1 \
-			--user pushgateway \
-			--password <pushgateway-basic-password>
+python -m redfish_exporter --config ./config.yaml \
+			   --port 9091 \
+			   --ip 127.0.0.1 \
+			   --user pushgateway \
+			   --password <pushgateway-basic-password>
 ```
 
 Copy systemd file in right place:
