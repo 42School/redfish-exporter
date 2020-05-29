@@ -29,7 +29,7 @@ useradd my_new_user -s /sbin/nologin
 
 Give new directory specific rights for particular user (`node-exp` or previous created)
 ```
-chown node-exp:node-exp -R redfish_exporter
+chown node-exp:node-exp -R redfish-exporter
 ```
 
 Copy `config.yaml.sample` and create a custom config file:
