@@ -31,18 +31,18 @@ class Collector(object):
             labels=[] + custom_label_names)
         m.add_metric([__version__] + custom_label_values, __version__)
 
-        if self._service is 'test_connection':
+        if self._service == 'test_connection':
             return m
 
         yield m
         """ get raids metrics """
-        raid = Raid(self._conn, self.prefix, self._config)
+        #raid = Raid(self._conn, self.prefix, self._config)
 
         """ get raids metrics """
         chassis = Chassis(self._conn, self.prefix, self._config)
         
         """ add raid emtrics """
-        yield from raid.parse_for_prom()
+        #yield from raid.parse_for_prom()
         
         """ add chassis emtrics """
         yield from chassis.parse_for_prom()

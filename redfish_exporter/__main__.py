@@ -7,6 +7,7 @@ import os
 import logging.config
 import pkg_resources
 import urllib
+import traceback
 
 from os import path
 from argparse import ArgumentParser
@@ -67,7 +68,7 @@ def testPushgatewayConnection(conn, version, config):
 
     try:
         metric = generate_latest(registry)
-        pushadd_to_gateway(config['ip'] + ':' + str(config['port']), job='push_to_push', registry=registry, handler=my_auth_handler)
+        push_to_gateway(config['ip'] + ':' + str(config['port']), job='push_to_push', registry=registry, handler=my_auth_handler)
     except Exception as e:
         logger.error("Can't push to '" + config['ip'] + "' " + str(e))
         sys.exit(0)
@@ -91,7 +92,7 @@ def metrics(target, target_info, config):
     )
 
     metric = generate_latest(registry)
-    pushadd_to_gateway(config['ip'] + ':' + str(config['port']), job=target_info['name'], registry=registry, handler=my_auth_handler)
+    push_to_gateway(config['ip'] + ':' + str(config['port']), job=target_info['name'], registry=registry, handler=my_auth_handler)
 
     logger.info('Succefull metrics push')
 
@@ -133,6 +134,7 @@ def main(args=None):
         try:
             scrapeTarget(targets, config)
         except Exception as e:
+            print(traceback.print_exc())
             logger.error("Can't scrape remote target: " + str(e))
         """ sleep time must be proportional to target number """
         time.sleep(len(targets['hosts'].items()) * 60)

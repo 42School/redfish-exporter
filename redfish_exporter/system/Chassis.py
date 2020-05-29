@@ -1,8 +1,5 @@
 import json
-import logging
 from prometheus_client.core import GaugeMetricFamily, InfoMetricFamily
-
-logger = logging.getLogger(__name__)
 
 IDRAC8_REDFISH_BASE_URL = '/redfish/v1'
 IDRAC8_REDFISH_MEMBERID = 'iDRAC.Embedded.1#'
@@ -38,7 +35,6 @@ class Chassis(object):
         else:
             ret, err, status = self._conn.get(CHASSIS_URL)
             if err:
-                logger.error(err)
                 raise Exception(err)
         try:
             """ get power url details link """
@@ -53,7 +49,6 @@ class Chassis(object):
             }
 
         except KeyError:
-            logger.error("Key error")
             raise Exception("Key error")
 
     def _get_metrics(self):
@@ -68,7 +63,6 @@ class Chassis(object):
             else:
                 thermal_status, err, status = self._conn.get(self._link_list['thermal'])
                 if err:
-                    logger.error(err)
                     raise Exception(err)
 
             self._metrics['thermal'] = {
@@ -89,7 +83,6 @@ class Chassis(object):
             else:
                 power_status, err, status = self._conn.get(self._link_list['power'])
                 if err:
-                    logger.error(err)
                     raise Exception(err)
             """
                 Get redundancy info (same for both powersuppliies)
@@ -198,16 +191,18 @@ class Chassis(object):
     def parse_for_prom(self):
         general = self._metrics['general']
         """ return general info """
-        gauge = InfoMetricFamily(self.prefix + '_general', '', labels=[])
-        gauge.add_metric([], general)
-        yield gauge
+        info = InfoMetricFamily(self.prefix + '_general', '', labels=[])
+        info.add_metric([], general)
+        yield info
 
         fans = self._metrics['fan']
         """ return thermal metrics """
-        gauge = GaugeMetricFamily(self.prefix + '_fan_redundancy', '', labels=['type'])
-        gauge.add_metric(['health'], self._cast(fans['redundancy_health']))
-        gauge.add_metric(['state'], self._cast(fans['redundancy_state']))
-        yield gauge
+        info = InfoMetricFamily(self.prefix + '_fan_redundancy', '', labels=[])
+        info.add_metric([], {
+            'health': fans['redundancy_health'] or 'NoValue',
+            'state': fans['redundancy_state'] or 'NoValue'
+        })
+        yield info
 
         gauge = GaugeMetricFamily(self.prefix + '_fan', '', labels=['name', 'low_limit', 'type'])
         for fan in fans['list']:
@@ -226,20 +221,27 @@ class Chassis(object):
 
         power = self._metrics['power']
         """ return power metrics """
-        gauge = GaugeMetricFamily(self.prefix + '_power', '', labels=['type'])
-        gauge.add_metric(['health'], self._cast(power['health']))
-        gauge.add_metric(['state'], self._cast(power['state']))
-        yield gauge
+        info = InfoMetricFamily(self.prefix + '_power', '', labels=[])
+        info.add_metric([], {
+            'health': power['health'] or 'NoValue',
+            'state': power['state'] or 'NoValue'
+        })
+        yield info
         gauge = GaugeMetricFamily(self.prefix + '_power_comsumption', 'watt consumption', labels=['type', 'unit', 'limit'])
-        gauge.add_metric(['average', 'watt', str(power['limit'])], self._cast(power['average']))
-        gauge.add_metric(['maxconsumed', 'watt', str(power['limit'])], self._cast(power['maxconsumed']))
-        gauge.add_metric(['minconsumed', 'watt', str(power['limit'])], self._cast(power['minconsumed']))
+        gauge.add_metric(['average', 'watt', str(power['limit'])], int(power['average']))
+        gauge.add_metric(['maxconsumed', 'watt', str(power['limit'])], int(power['maxconsumed']))
+        gauge.add_metric(['minconsumed', 'watt', str(power['limit'])], int(power['minconsumed']))
         yield gauge
 
         """ return power supply metrics """
+        info = InfoMetricFamily(self.prefix + '_power_supply', '', labels=[])
         gauge = GaugeMetricFamily(self.prefix + '_power_supply', '', labels=['type', 'name'])
         for powersupply in power['powersupplies']:
-            gauge.add_metric(['health', powersupply['name']], self._cast(powersupply['health']))
-            gauge.add_metric(['state', powersupply['name']], self._cast(powersupply['state']))
-            gauge.add_metric(['power_capacity', powersupply['name']], self._cast(powersupply['power_capacity']))
+            info.add_metric([], {
+                'health': powersupply['health'] or 'NoValue',
+                'state': powersupply['state'] or 'NoValue'
+            })
+            gauge.add_metric(['power_capacity', powersupply['name']], int(powersupply['power_capacity']))
+
+        yield info
         yield gauge

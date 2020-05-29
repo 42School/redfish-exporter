@@ -1,9 +1,6 @@
 import json
 import os
-import logging
-from prometheus_client.core import GaugeMetricFamily
-
-logger = logging.getLogger(__name__)
+from prometheus_client.core import InfoMetricFamily
 
 IDRAC8_REDFISH_BASE_URL = '/redfish/v1'
 RAID_CTRL_URL = "/Systems/System.Embedded.1/Storage/Controllers"
@@ -59,7 +56,6 @@ class Raid(object):
         else:
             ctrl_status, err, status = self._conn.get(RAID_CTRL_URL + '/' + ctrl_name)
             if err:
-                logging.error(err)
                 raise Exception(err)
 
         try:
@@ -87,17 +83,6 @@ class Raid(object):
             msg = "Invalid dict key from redfish response"
             raise Exception(msg)
 
-    """ transform metric value into valid prom metric value """
-    def _cast(self, value):
-        valid = ['OK', 'Enabled', True, 'True']
-        invalid = ['', 'KO', 'Disabled', 'Critical', None, 'None']
-
-        if value in valid:
-            return 1
-        elif valid in invalid:
-            return 0
-        return value
-
     """ 
         metrics must be on a specific format for prometheus
 
@@ -119,20 +104,19 @@ class Raid(object):
         }
     """
     def parse_for_prom(self):
-        label_names = ['name', 'type']
-        disk_label_names = ['name', 'controller', 'type']
         metrics = list()
 
         for metric_name, v in self.metrics.items():
             """ add prefix to metric and expose it """
-            gauge = GaugeMetricFamily(self.prefix + '_controller', '', labels=label_names)
-            gauge.add_metric([metric_name, 'health'], self._cast(v['health']))
-            gauge.add_metric([metric_name, 'state'], self._cast(v['state']))
-            yield gauge
+            info = InfoMetricFamily(self.prefix + '_controller', '', labels=[])
+            info.add_metric([], {
+                'health': v['health'] or 'NoValue',
+                'state': v['state'] or 'NoValue'
+            })
+            yield info
 
             """ expose disks state """
-            gauge = GaugeMetricFamily(self.prefix + '_disk_health', '', labels=disk_label_names)
+            info = InfoMetricFamily(self.prefix + '_disk', '', labels=[])
             for disk in v['disks']:
-                gauge.add_metric([disk['name'], metric_name, 'health'], self._cast(disk['health']))
-                gauge.add_metric([disk['name'], metric_name, 'state'], self._cast(disk['state']))
-            yield gauge
+                info.add_metric([], disk)
+            yield info
