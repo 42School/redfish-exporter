@@ -1,6 +1,6 @@
 import json
 import logging
-from prometheus_client.core import GaugeMetricFamily
+from prometheus_client.core import GaugeMetricFamily, InfoMetricFamily
 
 logger = logging.getLogger(__name__)
 
@@ -41,16 +41,16 @@ class Chassis(object):
                 logger.error(err)
                 raise Exception(err)
         try:
-            # Pages return 400
-            #ret_link = ret['Links']['CooledBy']
-            #self._link_list['fan'] = []
-
-            #""" get fans url details link """
-            #for link in ret_link:
-            #    self._link_list['fan'].append(link['@odata.id'])
             """ get power url details link """
             self._link_list['power'] = ret['Power']['@odata.id'].replace(IDRAC8_REDFISH_BASE_URL, '')
             self._link_list['thermal'] = ret['Thermal']['@odata.id'].replace(IDRAC8_REDFISH_BASE_URL, '')
+            self._metrics['general'] = {
+                'power_state': ret['PowerState'],
+                'tag_version': ret['SKU'],
+                'model': ret['Model'],
+                'health': ret['Status']['Health'],
+                'state': ret['Status']['State'],
+            }
 
         except KeyError:
             logger.error("Key error")
@@ -62,11 +62,6 @@ class Chassis(object):
     def _details(self):
 
         try:
-            """ get detailed metrics for fans """
-            # Pages return 400
-            #for fan_link in self._link_list['fan']:
-            #    fan_status = self._conn.get(fan_link)
- 
             """ get detailed metrics for thermal """
             if self._config['local']:
                 thermal_status = self._thermal_detail_json
@@ -80,8 +75,10 @@ class Chassis(object):
                 'location': []
             }
             for temp in thermal_status['Temperatures']:
+                temp_name = temp['MemberID'].replace(IDRAC8_REDFISH_MEMBERID, '')
+                temp_name = temp_name.replace('SystemBoard', '')
                 self._metrics['thermal']['location'].append({
-                    'name': temp['MemberID'].replace(IDRAC8_REDFISH_MEMBERID, ''),
+                    'name': temp_name.replace('Temp', ''),
                     'degres': temp['ReadingCelsius'],
                     'limit': temp['UpperThresholdCritical']
                 })
@@ -124,7 +121,7 @@ class Chassis(object):
             }
             for temp in thermal_status['Fans']:
                 self._metrics['fan']['list'].append({
-                    'name': temp['FanName'],
+                    'name': temp['FanName'].replace('System Board Fan', ''),
                     'rpm': temp['Reading'],
                     'low_limit': temp['LowerThresholdCritical'],
                     'health': temp['Status']['Health'],
@@ -148,6 +145,13 @@ class Chassis(object):
         metrics must be on a specific format for prometheus
 
         {
+            'general': {
+                'power_state': 'On',
+                'tag_version': 'QWE89IO',
+                'model': 'PowerEdge R640',
+                'health': 'Critical',
+                'state': 'Enabled',
+            }
             'thermal': {
                 'location': [{
                     'name': 'InletTemp',
@@ -192,6 +196,12 @@ class Chassis(object):
             }
     """
     def parse_for_prom(self):
+        general = self._metrics['general']
+        """ return general info """
+        gauge = InfoMetricFamily(self.prefix + '_general', '', labels=[])
+        gauge.add_metric([], general)
+        yield gauge
+
         fans = self._metrics['fan']
         """ return thermal metrics """
         gauge = GaugeMetricFamily(self.prefix + '_fan_redundancy', '', labels=['type'])

@@ -36,7 +36,6 @@ class Raid(object):
         else:
             ret, err, status = self._conn.get(RAID_CTRL_URL)
             if err:
-                logging.error(err)
                 raise Exception(err)
 
         try:
@@ -45,7 +44,6 @@ class Raid(object):
                 raid_ctrl_url = member['@odata.id']
                 self._ctrl_list.append(raid_ctrl_url.replace(IDRAC8_REDFISH_BASE_URL + RAID_CTRL_URL + '/', ''))
         except KeyError as e:
-            logging.error(e)
             raise Exception(e)
 
     def _get_metrics(self):
@@ -87,7 +85,6 @@ class Raid(object):
                 })
         except KeyError:
             msg = "Invalid dict key from redfish response"
-            logging.error(msg)
             raise Exception(msg)
 
     """ transform metric value into valid prom metric value """
