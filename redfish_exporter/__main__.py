@@ -70,7 +70,7 @@ def testPushgatewayConnection(conn, version, config):
         metric = generate_latest(registry)
         push_to_gateway(config['ip'] + ':' + str(config['port']), job='push_to_push', registry=registry, handler=my_auth_handler)
     except Exception as e:
-        logger.error("Can't push to '" + config['ip'] + "' " + str(e))
+        logger.error('Code error: ' + str(e))
         sys.exit(0)
 
 def metrics(target, target_info, config):
@@ -91,7 +91,6 @@ def metrics(target, target_info, config):
         config # pushgateway config
     )
 
-    metric = generate_latest(registry)
     push_to_gateway(config['ip'] + ':' + str(config['port']), job=target_info['name'], registry=registry, handler=my_auth_handler)
 
     logger.info('Succefull metrics push')
@@ -101,7 +100,7 @@ logger = logging.getLogger(__name__)
 
 def main(args=None):
     parser = ArgumentParser()
-    parser.add_argument('--local', default=None, help='If set, metrics are get form local static json files (testing)')
+    parser.add_argument('--local', action='store_true', help='If set, metrics are get form local static json files (testing)')
     parser.add_argument('--config', nargs='?', default='./config.yaml', help='Path to configuration file with targets (config.yml)')
     parser.add_argument('--port', nargs='?', type=int, default='9091', help='Pushgateway remote port')
     parser.add_argument('--ip', nargs='?', default='127.0.0.1', help='Pushgateway ip to which exporter will send metrics')
@@ -133,6 +132,9 @@ def main(args=None):
     while True:
         try:
             scrapeTarget(targets, config)
+        except IOError as e:
+            print(traceback.print_exc())
+            logger.error("Can't push to '" + config['ip'] + "' " + str(e))
         except Exception as e:
             print(traceback.print_exc())
             logger.error("Can't scrape remote target: " + str(e))

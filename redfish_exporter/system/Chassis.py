@@ -6,9 +6,10 @@ IDRAC8_REDFISH_MEMBERID = 'iDRAC.Embedded.1#'
 CHASSIS_URL = "/Chassis/System.Embedded.1"
 
 class Chassis(object):
-    def __init__(self, conn, prefix, config):
+    def __init__(self, conn, prefix, config, idrac_version):
         self._conn = conn
         self.prefix = prefix
+        self.idrac_version = idrac_version
         self._metrics = {}
         self._link_list = {}
         self._config = config
@@ -69,7 +70,10 @@ class Chassis(object):
                 'location': []
             }
             for temp in thermal_status['Temperatures']:
-                temp_name = temp['MemberID'].replace(IDRAC8_REDFISH_MEMBERID, '')
+                if self.idrac_version == 'idrac8':
+                    temp_name = temp['MemberID'].replace(IDRAC8_REDFISH_MEMBERID, '')
+                elif self.idrac_version == 'idrac9':
+                    temp_name = temp['MemberId'].replace(IDRAC8_REDFISH_MEMBERID, '')
                 temp_name = temp_name.replace('SystemBoard', '')
                 self._metrics['thermal']['location'].append({
                     'name': temp_name.replace('Temp', ''),
@@ -99,8 +103,12 @@ class Chassis(object):
             }
 
             for powersupply in power_status['PowerSupplies']:
+                if self.idrac_version == 'idrac8':
+                    memberID = 'MemberID'
+                elif self.idrac_version == 'idrac9':
+                    memberID = 'MemberId'
                 self._metrics['power']['powersupplies'].append({
-                    'name': powersupply['MemberID'].replace(IDRAC8_REDFISH_MEMBERID, ''),
+                    'name': powersupply[memberID].replace(IDRAC8_REDFISH_MEMBERID, ''),
                     'power_capacity': powersupply['PowerCapacityWatts'],
                     'health': powersupply['Status']['Health'],
                     'state': powersupply['Status']['State']
@@ -234,9 +242,9 @@ class Chassis(object):
         yield gauge
 
         """ return power supply metrics """
-        info = InfoMetricFamily(self.prefix + '_power_supply', '', labels=[])
         gauge = GaugeMetricFamily(self.prefix + '_power_supply', '', labels=['type', 'name'])
         for powersupply in power['powersupplies']:
+            info = InfoMetricFamily(self.prefix + '_power_supply', '', labels=[])
             info.add_metric([], {
                 'health': powersupply['health'] or 'NoValue',
                 'state': powersupply['state'] or 'NoValue'
