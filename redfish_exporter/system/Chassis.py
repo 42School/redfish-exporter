@@ -133,7 +133,7 @@ class Chassis(object):
 
     """ transform metric value into valid prom metric value """
     def _cast(self, value):
-        valid = ['Ok', 'OK', 'Enabled']
+        valid = ['Ok', 'OK', 'Enabled', 'On']
         invalid = ['', 'KO', 'Disabled', 'Critical', 'None', '0', None]
 
         if value in valid:
@@ -202,6 +202,19 @@ class Chassis(object):
         info = InfoMetricFamily(self.prefix + '_general', '', labels=[])
         info.add_metric([], general)
         yield info
+
+        """ separate general info for value """
+        gauge = GaugeMetricFamily(self.prefix + '_general_status', '', labels=['power_state'])
+        gauge.add_metric([general['power_state']], self._cast(general['power_state']))
+        yield gauge
+
+        gauge = GaugeMetricFamily(self.prefix + '_general_health', '', labels=['health'])
+        gauge.add_metric([general['health']], self._cast(general['health']))
+        yield gauge
+
+        gauge = GaugeMetricFamily(self.prefix + '_general_state', '', labels=['state'])
+        gauge.add_metric([general['state']], self._cast(general['state']))
+        yield gauge
 
         fans = self._metrics['fan']
         """ return thermal metrics """

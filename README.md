@@ -76,6 +76,8 @@ Check status, ensure everything's good:
 systemctl status redfish_exporter
 ```
 
+You can import grafana dashboard from [this one](https://grafana.com/grafana/dashboards/12403)
+
 Common problems:
 - Bad project ownership
 - Invalid project path
