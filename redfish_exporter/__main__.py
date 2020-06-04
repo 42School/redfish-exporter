@@ -29,7 +29,7 @@ config = {
     'user': None,
     'password': None,
 }
-__version__ = 1.1
+__version__ = 1.2
 
 """ TODO: CHECK CONFIG FILE VALIDITY """
  

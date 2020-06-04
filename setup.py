@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name = "redfish_exporter",
-    version = "1.1",
+    version = "1.2",
     author = "bibiche",
     description = ("Exporter for redfish API."),
     keywords = "prometheus exporter idrac redfish",
