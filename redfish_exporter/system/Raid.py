@@ -53,6 +53,13 @@ class Raid(object):
         for ctrl in self._ctrl_list:
             self._details(ctrl)
 
+    def _disk_name(self, disk_name):
+        if 'Physical Disk' in disk_name:
+            disk_name = disk_name.replace('Physical Disk', 'HDD')
+        elif 'Solid State Disk' in disk_name:
+            disk_name = disk_name.replace('Solid State Disk', 'SSD')
+        return disk_name
+
     def _get_disk_idrac8(self, ctrl_name, ctrl_status):
         if len(ctrl_status['Devices']) < 1:
             return
@@ -62,11 +69,8 @@ class Raid(object):
                 disk_name = disk['Name']
                 """ unused disk name """
                 if 'Backplane' not in disk_name and 'Integrated' not in disk_name:
-                    if 'Physical Disk' in disk_name:
-                        disk_name = disk_name.replace('Physical Disk', 'HDD')
-                    elif 'Solid State Disk' in disk_name:
-                        disk_name = disk_name.replace('Solid State Disk', 'SSD')
-                    disk_status = disk['Status']
+                    disk_name = self._disk_name(disk_name)
+                    disk_status = ret['Status']
                     self.metrics[ctrl_name]['disks'].append({
                         'name': disk_name,
                         'health': disk_status['Health'],
@@ -90,6 +94,7 @@ class Raid(object):
                 disk_name = ret['Name']
                 """ unused disk name """
                 if 'Backplane' not in disk_name and 'Integrated' not in disk_name:
+                    disk_name = self._disk_name(disk_name)
                     disk_status = ret['Status']
                     self.metrics[ctrl_name]['disks'].append({
                         'name': disk_name,
@@ -157,18 +162,24 @@ class Raid(object):
     """
     def parse_for_prom(self):
         metrics = list()
+        new_disks = list()
 
+        """ expose controller raid metrics """
         ctrl = GaugeMetricFamily(self.prefix + '_controller', '', labels=['name', 'health', 'state'])
         for metric_name, v in self.metrics.items():
             """ add prefix to metric and expose it """
             sum_status = int(self._cast(v['health']) + self._cast(v['state']))
             ctrl.add_metric([metric_name, v['health'], v['state']], sum_status)
 
-            """ expose disks state """
-            if len(v['disks']) > 0:
-                gauge = GaugeMetricFamily(self.prefix + '_disk', '', labels=['name', 'controller', 'health', 'state'])
-                for disk in v['disks']:
-                    sum_status = int(self._cast(disk['health']) + self._cast(disk['state']))
-                    gauge.add_metric([disk['name'], metric_name, disk['health'], disk['state']], sum_status)
-                yield gauge
+            for disk in v['disks']:
+                disk['controller'] = metric_name
+                new_disks.append(disk)
         yield ctrl
+
+        """ expose disks state """
+        gauge = GaugeMetricFamily(self.prefix + '_disk', '', labels=['controller','name', 'state', 'health'])
+
+        for disk in new_disks:
+            sum_status = int(self._cast(disk['health']) + self._cast(disk['state']))
+            gauge.add_metric([disk['controller'], disk['name'], disk['state'], disk['health']], sum_status)
+        yield gauge

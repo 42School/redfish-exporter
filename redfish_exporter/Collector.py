@@ -4,7 +4,7 @@ from .system.Raid import Raid
 from .system.Chassis import Chassis
 from prometheus_client.core import GaugeMetricFamily
 
-__version__ = 1.0
+__version__ = 1.1
 
 class Collector(object):
     def __init__(self, service, idrac_version, conn, prefix, config):
