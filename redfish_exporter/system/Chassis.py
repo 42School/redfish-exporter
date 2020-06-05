@@ -92,13 +92,23 @@ class Chassis(object):
                 Get redundancy info (same for both powersuppliies)
                 Basic metric consumption
             """
+            if len(power_status['Redundancy']) > 0:
+                health = power_status['Redundancy'][0]['Status']['Health'] if power_status['Redundancy'][0]['Status']['Health'] else 'NoValue'
+                state = power_status['Redundancy'][0]['Status']['State'] if power_status['Redundancy'][0]['Status']['State'] else 'NoValue'
+            else:
+                health = 'NoValue'
+                state = 'NoValue'
+            if len(power_status['PowerControl']) > 0:
+                power_control = power_status['PowerControl'][0]
+            else:
+                power_control = 'NoValue'
             self._metrics['power'] = {
-               'health': power_status['PowerSupplies'][0]['Redundancy'][0]['Status']['Health'],
-               'state': power_status['PowerSupplies'][0]['Redundancy'][0]['Status']['State'],
-               'limit': power_status['PowerControl'][0]['PowerLimit']['LimitInWatts'],
-               'average': power_status['PowerControl'][0]['PowerMetrics']['AverageConsumedWatts'],
-               'maxconsumed': power_status['PowerControl'][0]['PowerMetrics']['MaxConsumedWatts'],
-               'minconsumed': power_status['PowerControl'][0]['PowerMetrics']['MinConsumedWatts'],
+               'health': health,
+               'state': state,
+               'limit': power_control['PowerLimit']['LimitInWatts'],
+               'average': power_control['PowerMetrics']['AverageConsumedWatts'],
+               'maxconsumed': power_control['PowerMetrics']['MaxConsumedWatts'],
+               'minconsumed': power_control['PowerMetrics']['MinConsumedWatts'],
                'powersupplies': []
             }
 
@@ -107,26 +117,38 @@ class Chassis(object):
                     memberID = 'MemberID'
                 elif self.idrac_version == 'idrac9':
                     memberID = 'MemberId'
+                health = powersupply['Status']['Health'] if powersupply['Status']['Health'] else 'NoValue'
+                state = powersupply['Status']['State'] if powersupply['Status']['State'] else 'NoValue'
                 self._metrics['power']['powersupplies'].append({
                     'name': powersupply[memberID].replace(IDRAC8_REDFISH_MEMBERID, ''),
                     'power_capacity': powersupply['PowerCapacityWatts'],
-                    'health': powersupply['Status']['Health'],
-                    'state': powersupply['Status']['State']
+                    'health': health,
+                    'state': state
                 })
 
             """ get detailed metrics for fan """
+            if len(thermal_status['Redundancy']) > 0:
+                health = thermal_status['Redundancy'][0]['Status']['Health'] if len(thermal_status['Redundancy']) > 0 else 'NoValue'
+                state = thermal_status['Redundancy'][0]['Status']['State'] if len(thermal_status['Redundancy']) > 0 else 'NoValue'
+            else:
+                health = 'NoValue'
+                state = 'NoValue'
             self._metrics['fan'] = {
-                'redundancy_health': thermal_status['Redundancy'][0]['Status']['Health'],
-                'redundancy_state': thermal_status['Redundancy'][0]['Status']['State'],
+                'redundancy_health': health,
+                'redundancy_state': state,
                 'list': []
             }
             for temp in thermal_status['Fans']:
+                health = temp['Status']['Health']
+                state = temp['Status']['State']
+                final_health = health if health else 'NoValue'
+                final_state = state if state else 'NoValue'
                 self._metrics['fan']['list'].append({
                     'name': temp['FanName'].replace('System Board Fan', ''),
                     'rpm': temp['Reading'],
                     'low_limit': temp['LowerThresholdCritical'],
-                    'health': temp['Status']['Health'],
-                    'state': temp['Status']['State']
+                    'health': final_health,
+                    'state': final_state
                 })
         except KeyError as e:
             raise e
@@ -134,7 +156,7 @@ class Chassis(object):
     """ transform metric value into valid prom metric value """
     def _cast(self, value):
         valid = ['Ok', 'OK', 'Enabled', 'On']
-        invalid = ['', 'KO', 'Disabled', 'Critical', 'None', '0', None]
+        invalid = ['', 'KO', 'Disabled', 'Critical', 'None', '0', None, 'NoValue']
 
         if value in valid:
             return 1
@@ -218,19 +240,17 @@ class Chassis(object):
 
         fans = self._metrics['fan']
         """ return thermal metrics """
-        info = InfoMetricFamily(self.prefix + '_fan_redundancy', '', labels=[])
-        info.add_metric([], {
-            'health': fans['redundancy_health'] or 'NoValue',
-            'state': fans['redundancy_state'] or 'NoValue'
-        })
-        yield info
-
-        gauge = GaugeMetricFamily(self.prefix + '_fan', '', labels=['name', 'low_limit', 'type'])
-        for fan in fans['list']:
-            gauge.add_metric([fan['name'], str(fan['low_limit']), 'rpm'], self._cast(fan['rpm']))
-            gauge.add_metric([fan['name'], str(fan['low_limit']), 'health'], self._cast(fan['health']))
-            gauge.add_metric([fan['name'], str(fan['low_limit']), 'state'], self._cast(fan['state']))
+        gauge = GaugeMetricFamily(self.prefix + '_fan_redundancy', '', labels=['health', 'state'])
+        gauge.add_metric([fans['redundancy_health'], fans['redundancy_state']], int(self._cast(fans['redundancy_health']) + self._cast(fans['redundancy_state'])))
         yield gauge
+
+        gauge = GaugeMetricFamily(self.prefix + '_fan_rpm', '', labels=['name', 'low_limit'])
+        gauge_status = GaugeMetricFamily(self.prefix + '_fan', '', labels=['name', 'health', 'state'])
+        for fan in fans['list']:
+            gauge.add_metric([fan['name'], str(fan['low_limit'])], self._cast(fan['rpm']))
+            gauge_status.add_metric([fan['name'], fan['health'], fan['state']], int(self._cast(fan['health']) + self._cast(fan['state'])))
+        yield gauge
+        yield gauge_status
 
         thermal = self._metrics['thermal']
         """ return thermal metrics """
@@ -240,14 +260,12 @@ class Chassis(object):
             gauge.add_metric([location['name'], str(location['limit'])], location['degres'])
         yield gauge
 
-        power = self._metrics['power']
         """ return power metrics """
-        info = InfoMetricFamily(self.prefix + '_power', '', labels=[])
-        info.add_metric([], {
-            'health': power['health'] or 'NoValue',
-            'state': power['state'] or 'NoValue'
-        })
-        yield info
+        power = self._metrics['power']
+        gauge = GaugeMetricFamily(self.prefix + '_power', '', labels=['health', 'state'])
+        gauge.add_metric([power['health'], power['state']], int(self._cast(power['state']) + self._cast(power['health'])))
+        yield gauge
+
         gauge = GaugeMetricFamily(self.prefix + '_power_comsumption', 'watt consumption', labels=['type', 'unit', 'limit'])
         gauge.add_metric(['average', 'watt', str(power['limit'])], int(power['average']))
         gauge.add_metric(['maxconsumed', 'watt', str(power['limit'])], int(power['maxconsumed']))
@@ -255,14 +273,8 @@ class Chassis(object):
         yield gauge
 
         """ return power supply metrics """
-        gauge = GaugeMetricFamily(self.prefix + '_power_supply', '', labels=['type', 'name'])
+        gauge = GaugeMetricFamily(self.prefix + '_power_supply', '', labels=['name', 'capacity', 'health', 'state'])
         for powersupply in power['powersupplies']:
-            info = InfoMetricFamily(self.prefix + '_power_supply', '', labels=[])
-            info.add_metric([], {
-                'health': powersupply['health'] or 'NoValue',
-                'state': powersupply['state'] or 'NoValue'
-            })
-            gauge.add_metric(['power_capacity', powersupply['name']], int(powersupply['power_capacity']))
+            gauge.add_metric([powersupply['name'], str(powersupply['power_capacity']), powersupply['health'], powersupply['state']], int(self._cast(powersupply['state']) + self._cast(powersupply['health'])))
 
-        yield info
         yield gauge

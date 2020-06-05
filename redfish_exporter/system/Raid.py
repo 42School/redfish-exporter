@@ -48,6 +48,8 @@ class Raid(object):
             raise Exception(e)
 
     def _get_metrics(self):
+        self.metrics['controllers'] = list()
+        self.metrics['disks'] = list()
 
         """ get controllers details """
         for ctrl in self._ctrl_list:
@@ -66,15 +68,19 @@ class Raid(object):
         try:
             """ get disk list by controller """
             for disk in ctrl_status['Devices']:
+
                 disk_name = disk['Name']
-                """ unused disk name """
                 if 'Backplane' not in disk_name and 'Integrated' not in disk_name:
+                    disk_status = disk['Status']
                     disk_name = self._disk_name(disk_name)
-                    disk_status = ret['Status']
-                    self.metrics[ctrl_name]['disks'].append({
+                    health = disk_status['Health'] if disk_status['Health'] else 'NoValue'
+                    state = disk_status['State'] if disk_status['State'] else 'NoValue'
+
+                    self.metrics['disks'].append({
+                        'controller': ctrl_name,
                         'name': disk_name,
-                        'health': disk_status['Health'],
-                        'state': disk_status['State']
+                        'health': health,
+                        'state': state
                     })
         except KeyError as e:
             raise Exception(e)
@@ -96,10 +102,14 @@ class Raid(object):
                 if 'Backplane' not in disk_name and 'Integrated' not in disk_name:
                     disk_name = self._disk_name(disk_name)
                     disk_status = ret['Status']
-                    self.metrics[ctrl_name]['disks'].append({
+                    health = disk_status['Health'] if disk_status['Health'] else 'NoValue'
+                    state = disk_status['State'] if disk_status['State'] else 'NoValue'
+
+                    self.metrics['disks'].append({
+                        'controller': ctrl_name,
                         'name': disk_name,
-                        'health': disk_status['Health'],
-                        'state': disk_status['State']
+                        'health': health,
+                        'state': state
                     })
         except KeyError as e:
             raise Exception(e)
@@ -118,11 +128,11 @@ class Raid(object):
 
             """ don't keep unused controller """
             if ctrl['Health'] and ctrl['State']:
-                self.metrics[ctrl_name] = {
+                self.metrics['controllers'].append({
+                    'name': ctrl_name,
                     'health': ctrl['Health'],
                     'state': ctrl['State'],
-                    'disks': []
-                }
+                })
         except KeyError:
             raise Exception('Invalid dict key from redfish for controller disk')
 
@@ -161,25 +171,19 @@ class Raid(object):
         }
     """
     def parse_for_prom(self):
-        metrics = list()
-        new_disks = list()
-
-        """ expose controller raid metrics """
+        """ add prefix to metric and expose controller it """
         ctrl = GaugeMetricFamily(self.prefix + '_controller', '', labels=['name', 'health', 'state'])
-        for metric_name, v in self.metrics.items():
-            """ add prefix to metric and expose it """
-            sum_status = int(self._cast(v['health']) + self._cast(v['state']))
-            ctrl.add_metric([metric_name, v['health'], v['state']], sum_status)
 
-            for disk in v['disks']:
-                disk['controller'] = metric_name
-                new_disks.append(disk)
+        for controller in self.metrics['controllers']:
+            sum_status = int(self._cast(controller['health']) + self._cast(controller['state']))
+            ctrl.add_metric([controller['name'], controller['health'], controller['state']], sum_status)
+
         yield ctrl
 
-        """ expose disks state """
+        """ add prefix to metric and expose disk it """
         gauge = GaugeMetricFamily(self.prefix + '_disk', '', labels=['controller','name', 'state', 'health'])
 
-        for disk in new_disks:
+        for disk in self.metrics['disks']:
             sum_status = int(self._cast(disk['health']) + self._cast(disk['state']))
             gauge.add_metric([disk['controller'], disk['name'], disk['state'], disk['health']], sum_status)
         yield gauge

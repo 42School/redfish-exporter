@@ -5,8 +5,8 @@ StartLimitInterval=0
 
 [Service]
 Type=simple
-User=node-exp
-Group=node-exp
+User=prometheus
+Group=prometheus
 Environment="PYTHONPATH=/var/lib/redfish-exporter"
 ExecStart=/var/lib/redfish-exporter/venv/bin/python -m redfish_exporter \
 	--config /var/lib/redfish-exporter/config.yaml \
@@ -16,15 +16,6 @@ ExecStart=/var/lib/redfish-exporter/venv/bin/python -m redfish_exporter \
 SyslogIdentifier=redfish_exporter
 Restart=always
 RestartSec=1
-
-PrivateTmp=yes
-ProtectHome=yes
-NoNewPrivileges=yes
-
-ProtectSystem=strict
-ProtectControlGroups=true
-ProtectKernelModules=true
-ProtectKernelTunables=yes
 
 [Install]
 WantedBy=multi-user.target

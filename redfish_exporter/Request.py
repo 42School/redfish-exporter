@@ -3,6 +3,8 @@ import json
 import re
 import sys
 
+requests.packages.urllib3.disable_warnings()
+
 """
     Main request class,
     define default function for HTTP methods
@@ -41,7 +43,7 @@ class Req():
         response = None
 
         try:
-            response = self._session.request(method, url, data=data, timeout=15)
+            response = self._session.request(method, url, data=data, timeout=30)
             response.raise_for_status()
             response = response.json()
         except requests.exceptions.ConnectionError as err:
