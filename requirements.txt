@@ -18,7 +18,7 @@ ply==3.11
 prometheus-client==0.7.1
 python-dateutil==2.8.1
 pytz==2020.1
-PyYAML==5.3.1
+PyYAML==5.4
 redfish==2.1.5
 requests==2.23.0
 six==1.14.0
